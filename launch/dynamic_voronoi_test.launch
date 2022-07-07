@@ -1,0 +1,64 @@
+<?xml version="1.0"?>
+<launch>
+     
+
+
+     <arg name="dbg_args"   default="gdb -ex run --args"/>
+     <arg name="debug_args"   default=""/>
+
+     <node pkg="dynamic_voronoi" type="dynamic_voronoi_test" name="stair_detection_ros_node" launch-prefix="$(arg debug_args)" output="screen">
+
+          <param name="density_img_dir"    value="/home/kangneoung/sw_repo/dynamic_voronoi/src/dynamic_voronoi/test/density/density_200_200_plain.png"/>
+
+          <param name="map_height"        value="100"/>
+          <param name="map_width"        value="100"/>
+          <param name="agent_num"        value="20"/>
+          <rosparam param="agent_pose_list">
+          <!-- [
+            2, 2, 
+            2, 4, 
+            2, 6,
+            2, 8,
+            2, 10
+                 ] -->
+
+           <!-- [
+            2, 2, 
+            2, 4, 
+            2, 6,
+            2, 8,
+            2, 10,
+            4, 2,
+            4, 4,
+            4, 6,
+            4, 8,
+            4, 10            
+                  ] -->
+
+           [
+            2, 2, 
+            2, 4, 
+            2, 6,
+            2, 8,
+            2, 10,
+            4, 2,
+            4, 4,
+            4, 6,
+            4, 8,
+            4, 10,
+            2, 12,
+            2, 14,
+            2, 16,
+            2, 18,
+            2, 20,
+            4, 12,
+            4, 14,
+            4, 16,
+            4, 18,
+            4, 20            
+                  ]
+
+          </rosparam>
+     </node>
+
+</launch>
