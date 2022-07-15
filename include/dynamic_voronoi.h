@@ -42,6 +42,8 @@ class DynamicVoronoi{
 		int VoroPartNum_;
 		float TotalArea_;
 		
+		std::vector<std::vector<float>> AgentCoorOpenSp_;
+		
 		std::map<int,std::vector<float>> VoroPartCenters_;
 		
 		
@@ -74,6 +76,9 @@ class DynamicVoronoi{
 	   bool ExpandedVoronoi(bool is_propagation_animation = false, std::string img_dir ="/home/dummy", std::string label_dir = "/home/dummy.txt");
 	   void Propagatation(int agent_index, unsigned short agent_cen_x, unsigned short agent_cen_y, int col, int row);
 	   float MoveAgents();
+	   bool FindNearPtNonObs(PartitionInfo* partition_info_single, float init_agent_coor_x_local, float init_agent_coor_y_local, float increment_x, float increment_y, float* ref_dist_sq);
+	   bool FindNearPtNonObs_R2(PartitionInfo* partition_info_single, float init_agent_coor_x_local, float init_agent_coor_y_local, float* ref_dist_sq);
+	   bool AgentPosPostCheck();
 	   void MainOptProcess(bool is_optimize_animation = false, std::string img_dir ="/home/dummy", std::string label_dir = "/home/dummy.txt", int max_step_size = 10, float terminate_criteria = 0.1);
 	   void CentroidCal();
 	 
