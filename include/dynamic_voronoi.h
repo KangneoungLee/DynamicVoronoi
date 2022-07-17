@@ -78,7 +78,7 @@ class DynamicVoronoi{
 	   float MoveAgents();
 	   bool FindNearPtNonObs(PartitionInfo* partition_info_single, float init_agent_coor_x_local, float init_agent_coor_y_local, float increment_x, float increment_y, float* ref_dist_sq);
 	   bool FindNearPtNonObs_R2(PartitionInfo* partition_info_single, float init_agent_coor_x_local, float init_agent_coor_y_local, float* ref_dist_sq);
-	   bool AgentPosPostCheck();
+       void AgentPosPostCheck(PartitionInfo* partition_info_single);
 	   void MainOptProcess(bool is_optimize_animation = false, std::string img_dir ="/home/dummy", std::string label_dir = "/home/dummy.txt", int max_step_size = 10, float terminate_criteria = 0.1);
 	   void CentroidCal();
 	 

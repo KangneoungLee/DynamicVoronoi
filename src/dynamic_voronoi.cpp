@@ -824,6 +824,18 @@ void DynamicVoronoi::CentroidCal()
 		partition_info_single->part_area = 0;
 		partition_info_single->centroid_momentsum_x_ = 0;
 		partition_info_single->centroid_momentsum_y_ = 0;
+		partition_info_single->LeftFrontPt[0] = 0;
+		partition_info_single->LeftFrontPt[1] = 0;
+		partition_info_single->LeftFrontPtDis = this->map_width_ + this->map_height_;
+		partition_info_single->RightFrontPt[0] = 0;
+		partition_info_single->RightFrontPt[1] = 0;
+		partition_info_single->RightFrontPtDis = this->map_width_ + this->map_height_;		
+		partition_info_single->LeftRearPt[0] = 0;
+		partition_info_single->LeftRearPt[1] = 0;
+		partition_info_single->LeftRearPtDis = this->map_width_ + this->map_height_;
+		partition_info_single->RightRearPt[0] = 0;
+		partition_info_single->RightRearPt[1] = 0;
+		partition_info_single->RightRearPtDis = this->map_width_+ this->map_height_;			
 	}
 
     /* calcuate variables for centroid  */
@@ -840,6 +852,39 @@ void DynamicVoronoi::CentroidCal()
 			partition_info_single->part_area = partition_info_single->part_area + 1*GetDensity(col, row); 
 			partition_info_single->centroid_momentsum_x_ = partition_info_single->centroid_momentsum_x_ + col*1*GetDensity(col, row);
 			partition_info_single->centroid_momentsum_y_ = partition_info_single->centroid_momentsum_y_ + row*1*GetDensity(col, row);
+			
+			/*calculate points close to each corners */ /* using Manhattan distance to reduce the computation cost*/
+			int LeftFrontPtDisTemp = (col - 0) + (row - 0);			
+			if(LeftFrontPtDisTemp <= partition_info_single->LeftFrontPtDis)  
+			{
+				partition_info_single->LeftFrontPtDis = LeftFrontPtDisTemp;
+				partition_info_single->LeftFrontPt[0] = col;
+				partition_info_single->LeftFrontPt[1] = row;
+			}
+			
+			int RightFrontPtDisTemp = (this->map_width_ - col) + (row - 0);			
+			if(RightFrontPtDisTemp <= partition_info_single->RightFrontPtDis)  
+			{
+				partition_info_single->RightFrontPtDis = RightFrontPtDisTemp;
+				partition_info_single->RightFrontPt[0] = col;
+				partition_info_single->RightFrontPt[1] = row;
+			}				
+
+			int LeftRearPtDisTemp = (col - 0) + (this->map_height_ - row);			
+			if(LeftRearPtDisTemp <= partition_info_single->LeftRearPtDis)  
+			{
+				partition_info_single->LeftRearPt[0] = col;
+				partition_info_single->LeftRearPt[1] = row;
+				partition_info_single->LeftRearPtDis = LeftRearPtDisTemp;				
+			}
+
+			int RightRearPtDisTemp = (this->map_width_ - col) + (this->map_height_ - row);			
+			if(RightRearPtDisTemp <= partition_info_single->RightRearPtDis)  
+			{
+				partition_info_single->RightRearPt[0] = col;
+				partition_info_single->RightRearPt[1] = row;
+				partition_info_single->RightRearPtDis = RightRearPtDisTemp;				
+			}
 			
 		}
 		
@@ -872,7 +917,7 @@ float DynamicVoronoi::MoveAgents()
 {
 	PartitionInfo* partition_info_single;
 	float error = 0;
-	
+	int cnt_project_req = 0;
 	std::cout<<" ************DynamicVoronoi::MoveAgents start ***************" <<std::endl;
 	
 	for(int i = 0; i < this->VoroPartNum_; i++)
@@ -887,6 +932,7 @@ float DynamicVoronoi::MoveAgents()
 		else
 		{
 			is_Partition_inObs = true;
+			cnt_project_req++;
 		}
 		
 		std::cout << "agent index :" << i << " partition_info_single->part_area : "<< partition_info_single->part_area <<" is_Partition_inObs : "<< is_Partition_inObs << std::endl;
@@ -984,12 +1030,22 @@ float DynamicVoronoi::MoveAgents()
 			if(density>0)
 			{
 				std::vector<float> AgentCoor_temp;
-				AgentCoor_temp.push_back(agent_coor_x);
-				AgentCoor_temp.push_back(agent_coor_y);
+				AgentCoor_temp.push_back(partition_info_single->part_agent_coor_x_);
+				AgentCoor_temp.push_back(partition_info_single->part_agent_coor_y_ );
 				
 			    this->AgentCoorOpenSp_.push_back(AgentCoor_temp);	
 			}
-		    
+		    else
+			{
+
+                this->AgentPosPostCheck(partition_info_single);				
+				
+				std::vector<float> AgentCoor_temp;
+				AgentCoor_temp.push_back(partition_info_single->part_agent_coor_x_);
+				AgentCoor_temp.push_back(partition_info_single->part_agent_coor_y_ );
+				
+			    this->AgentCoorOpenSp_.push_back(AgentCoor_temp);	
+			}
 		
 		    /* calculate error */
 		    error = error + (agent_coor_x - centroid_x)*(agent_coor_x - centroid_x) + (agent_coor_y - centroid_y)*(agent_coor_y - centroid_y);
@@ -1000,13 +1056,58 @@ float DynamicVoronoi::MoveAgents()
 		
 	}
 	
+	if(cnt_project_req==0)
+	{
+		this->AgentCoorOpenSp_.clear();
+	}
+	
 	return error;
 }
 
 
-bool DynamicVoronoi::AgentPosPostCheck()
+void DynamicVoronoi::AgentPosPostCheck(PartitionInfo* partition_info_single)
 {
-	bool  is_AgentPos_inObs = false;
+	bool is_proj_success  = false;
+	float ref_dist_sq = this->map_width_*this->map_width_ + this->map_height_*this->map_height_; 
+
+    float init_agent_coor_x = partition_info_single->part_agent_coor_x_;
+	float init_agent_coor_y = partition_info_single->part_agent_coor_y_;
+
+	float gradient_L1;
+	float increment_x_temp;
+	if(partition_info_single->LeftRearPt[0] == partition_info_single->LeftFrontPt[0])
+	{
+	    gradient_L1 = 1;
+		increment_x_temp = 0;
+	}
+	else
+	{
+	    gradient_L1 = (partition_info_single->LeftRearPt[1] - partition_info_single->LeftFrontPt[1])/(partition_info_single->LeftRearPt[0] - partition_info_single->LeftFrontPt[0]);
+		increment_x_temp = 1;
+	}
+				
+	bool is_proj_success_temp = this->FindNearPtNonObs(partition_info_single, init_agent_coor_x, init_agent_coor_y, increment_x_temp, gradient_L1, &ref_dist_sq);  // go to right along the L1 line 
+	is_proj_success = is_proj_success_temp | is_proj_success;
+	is_proj_success_temp = this->FindNearPtNonObs(partition_info_single, init_agent_coor_x, init_agent_coor_y, -increment_x_temp, -gradient_L1, &ref_dist_sq);  // go to left along the L1 line
+	is_proj_success = is_proj_success_temp | is_proj_success;
+				
+	float gradient_L2;
+				
+	if(partition_info_single->RightRearPt[0] == partition_info_single->RightFrontPt[0])
+	{
+	   gradient_L2 = 1;
+	   increment_x_temp = 0;
+	}
+	else
+	{
+	    gradient_L2 = (partition_info_single->RightRearPt[1] - partition_info_single->RightFrontPt[1])/(partition_info_single->RightRearPt[0] - partition_info_single->RightFrontPt[0]);
+	    increment_x_temp = 1;
+	}
+				
+	is_proj_success_temp = this->FindNearPtNonObs(partition_info_single, partition_info_single->part_agent_coor_x_, partition_info_single->part_agent_coor_y_, increment_x_temp, gradient_L2, &ref_dist_sq);  // go to right along the L1 line 
+	is_proj_success = is_proj_success_temp | is_proj_success;
+	is_proj_success_temp = this->FindNearPtNonObs(partition_info_single, partition_info_single->part_agent_coor_x_, partition_info_single->part_agent_coor_y_, -increment_x_temp, -gradient_L2, &ref_dist_sq);  // go to left along the L1 line
+	is_proj_success = is_proj_success_temp | is_proj_success;	
 }
 
 
