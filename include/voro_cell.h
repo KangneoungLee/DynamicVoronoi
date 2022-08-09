@@ -18,7 +18,7 @@ class VoroCell{
 	
 	public: 
 	   bool is_edge_;
-	   unsigned int sq_dist_;
+	   float sq_dist_;
 	   unsigned short agentclass_;
 	   unsigned short col_index_;
 	   unsigned short row_index_;
@@ -48,6 +48,15 @@ class PartitionInfo{
 	   float part_agent_coor_y_;
 	   float agent_parllel_momentsum_x_;
 	   float agent_parllel_momentsum_y_;
+	   int LeftFrontPt[2];
+	   int LeftFrontPtDis;
+	   int RightFrontPt[2];
+	   int RightFrontPtDis;
+	   int LeftRearPt[2];
+	   int LeftRearPtDis;
+	   int RightRearPt[2];
+	   int RightRearPtDis;	   
+	   
 	
 	/*constructor and destructor*/
 	 PartitionInfo();

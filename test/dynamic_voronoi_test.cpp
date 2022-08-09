@@ -42,6 +42,9 @@ void DynamicVoronoiRosUnitTest::testrun()
 	 int map_height = 100;
 	 int map_width = 100;
 	 int agent_num = 5;
+	 float weight_w = 1;
+	 float weight_h = 1;
+	 float lamda = 0;
 	 
 	 std::vector<std::vector<int> > agent_pose_vec;
 	 XmlRpc::XmlRpcValue agent_pose_list;
@@ -51,6 +54,10 @@ void DynamicVoronoiRosUnitTest::testrun()
 	 param_nh_.getParam("map_width",map_width);
 	 param_nh_.getParam("agent_num",agent_num);
 	 param_nh_.getParam("agent_pose_list",agent_pose_list);	 
+	 
+	 param_nh_.getParam("weight_width",weight_w);
+	 param_nh_.getParam("weight_height",weight_h);
+	 param_nh_.getParam("lamda",lamda);
 	 
 	 ROS_ASSERT(agent_pose_list.getType() == XmlRpc::XmlRpcValue::TypeArray);
 	 
@@ -85,9 +92,9 @@ void DynamicVoronoiRosUnitTest::testrun()
    
 	 unsigned char* densityPtr = this->read_density(density_array, density_img_dir, map_height,map_width);
    
-
+     float DropOutToleranceRate = 0.2;
    
-	 DynamicVoronoi dynamicVoronoi(map_height, map_width, false, false,densityPtr);
+	 DynamicVoronoi dynamicVoronoi(map_height, map_width, DropOutToleranceRate, weight_w, weight_h, lamda, false, false,densityPtr);
 	 
 	 std::string densitymap_dir = "/home/kangneoung/sw_repo/dynamic_voronoi/src/dynamic_voronoi/test/densitymap.txt";
 	 std::string agentmap_dir = "/home/kangneoung/sw_repo/dynamic_voronoi/src/dynamic_voronoi/test/agentmap.txt";
@@ -122,7 +129,7 @@ void DynamicVoronoiRosUnitTest::testrun()
 	 
 	 bool is_optimize_animation = true;
 	 
-	 dynamicVoronoi.MainOptProcess(is_optimize_animation, img_anima_opt_dir, label_dir, 100, 0.1);
+	 dynamicVoronoi.MainOptProcess(is_optimize_animation, img_anima_opt_dir, label_dir, 300, 0.1);
 	 
 	 //bool is_propagation_animation = true;
 	 
@@ -138,26 +145,32 @@ void DynamicVoronoiRosUnitTest::testrun()
 unsigned char* DynamicVoronoiRosUnitTest::read_density(unsigned char*  density_array, std::string img_dir, int height, int width)
 {
 	cv::Mat density_img = imread(img_dir, cv::IMREAD_GRAYSCALE);
+	
+	cv::resize(density_img, density_img, cv::Size(height, width));
     cv::Mat  density_img_thresh;
 
-    cv::threshold(density_img, density_img_thresh, 254, 254, cv::THRESH_TRUNC);
-
+    //cv::threshold(density_img, density_img_thresh, 254, 254, cv::THRESH_TRUNC);
+    density_img_thresh = density_img.clone();
+	
 	cv::Mat mat_255(cv::Size(density_img_thresh.rows, density_img_thresh.cols), CV_8UC1, cv::Scalar(255));
 	
+	std::cout<< "debug 1" << "density_img_thresh.rows  : " << density_img_thresh.rows << " density_img_thresh.cols : "  << density_img_thresh.cols << " density_img_thresh.channels : "  << density_img_thresh.channels() << std::endl;
 	
 	cv::Mat converted_density;
 	cv::absdiff(mat_255, density_img_thresh, converted_density);
 	
-	
-	
+	std::cout<< "debug 2" << std::endl;
 	cv::Mat density_resized;
 	cv::resize(converted_density, density_resized, cv::Size(height, width));
 	
+	std::cout<< "debug 3" << std::endl;
 	//cv::imshow("validation", density_resized);
 	//cv::waitKey(0);
 	
 	density_resized.convertTo(density_resized, CV_32FC1);
 	
+	
+	std::cout<< "debug 4" << std::endl;
 	for(int row=0; row<density_resized.rows; row++)  
 	{
       for(int col=0; col<density_resized.cols; col++)
@@ -168,6 +181,8 @@ unsigned char* DynamicVoronoiRosUnitTest::read_density(unsigned char*  density_a
 		   //std::cout<<" row: "<< row << " col: "<< col << " index: "<< index << " density_array[index] : "<< (float)density_array[index]  << "  density_resized.at<uchar>(row, col): "<<  density_resized.at<float>(row, col) <<std::endl;
 	  }
 	}		
+	 
+	std::cout<<" ************Read density information ***************" <<std::endl;
 	
 	return density_array;
 	

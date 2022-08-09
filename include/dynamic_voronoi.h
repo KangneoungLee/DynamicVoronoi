@@ -32,15 +32,23 @@ class DynamicVoronoi{
 	    unsigned char* vorocellDenseMap_;
 		
 		unsigned char* vorocellDenseMapExtPtr_;
+		bool* agentDropoutCheck_;
 		
         unsigned short map_height_;
         unsigned short map_width_;		
 		bool is_uniform_density_;
 		bool is_point_optimization_;
 		bool is_propa_completed_;
+		bool dropout_active_ = false;
+		bool inhibit_dropout_ = false;
+		int inhibit_dropout_cnt = 0;
 		
 		int VoroPartNum_;
 		float TotalArea_;
+		float DropOutToleranceRate_;
+		float weight_w_;
+		float weight_h_;
+		float lamda_;
 		
 		std::vector<std::vector<float>> AgentCoorOpenSp_;
 		
@@ -56,7 +64,7 @@ class DynamicVoronoi{
 	
 	public: 
 	/*constructor and destructor*/
-	   DynamicVoronoi(unsigned short map_height, unsigned short map_width, bool is_uniform_density, bool is_point_optimization, unsigned char* vorocellDenseMapExtPtr = NULL);
+	   DynamicVoronoi(unsigned short map_height, unsigned short map_width, float DropOutToleranceRate, float weight_w, float weight_h, float lamda, bool is_uniform_density, bool is_point_optimization, unsigned char* vorocellDenseMapExtPtr = NULL);
 	   ~DynamicVoronoi();
 	   
 	   int GetIndex(int x, int y);
@@ -81,6 +89,7 @@ class DynamicVoronoi{
        void AgentPosPostCheck(PartitionInfo* partition_info_single);
 	   void MainOptProcess(bool is_optimize_animation = false, std::string img_dir ="/home/dummy", std::string label_dir = "/home/dummy.txt", int max_step_size = 10, float terminate_criteria = 0.1);
 	   void CentroidCal();
+	   void AgentDropOut();
 	 
 //	VoroCell* DynamicVoronoi::operator[](int index)
 //   {
