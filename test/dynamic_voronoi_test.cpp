@@ -44,43 +44,47 @@ void DynamicVoronoiRosUnitTest::testrun()
 	 int agent_num = 5;
 	 float weight_w = 1;
 	 float weight_h = 1;
+	 float dataum_x = 1;
+	 float dataum_y = 1;
 	 float lamda = 0;
 	 
-	 std::vector<std::vector<int> > agent_pose_vec;
-	 XmlRpc::XmlRpcValue agent_pose_list;
+	 std::vector<std::vector<int> > agent_attribute_vec;
+	 XmlRpc::XmlRpcValue agent_attribute_list;
 	 
 	 
 	 param_nh_.getParam("map_height",map_height);
 	 param_nh_.getParam("map_width",map_width);
 	 param_nh_.getParam("agent_num",agent_num);
-	 param_nh_.getParam("agent_pose_list",agent_pose_list);	 
+	 param_nh_.getParam("agent_attribute_list",agent_attribute_list);	 
 	 
 	 param_nh_.getParam("weight_width",weight_w);
 	 param_nh_.getParam("weight_height",weight_h);
+	 param_nh_.getParam("dataum_x",dataum_x);
+	 param_nh_.getParam("dataum_y",dataum_y);
 	 param_nh_.getParam("lamda",lamda);
 	 
-	 ROS_ASSERT(agent_pose_list.getType() == XmlRpc::XmlRpcValue::TypeArray);
+	 ROS_ASSERT(agent_attribute_list.getType() == XmlRpc::XmlRpcValue::TypeArray);
 	 
 	 for (int i = 0; i < agent_num; i++)
 	 {
-		 std::vector<int> agent_pose;
-		 for (int j =0; j< 2; j++)
+		 std::vector<int> agent_attribute;
+		 for (int j =0; j< 4; j++)
 		 {
 			 // These matrices can cause problems if all the types
 			 // aren't specified with decimal points. Handle that
 		    std::ostringstream ostr;
-            ostr << agent_pose_list[2 * i + j];    
+            ostr << agent_attribute_list[4 * i + j];    
 			std::istringstream istr(ostr.str()); // istringstream parses the data corresponding to the data type
 			
 			int value_temp;
 			istr >> value_temp;
 			//std::cout<< " agent num index : " << i << "coordinate index : " << j << " Array index : " << agent_num * i + j << " value : " << value_temp << std::endl;
-			//std::cout<< "agent pose list " << agent_pose_list.size() << std::endl;	
-			agent_pose.push_back(value_temp);
+			//std::cout<< "agent_attribute_list " << agent_attribute_list.size() << std::endl;	
+			agent_attribute.push_back(value_temp);
 		 }
 		 
-		 //std::cout<< " agent_pose[0]  : " << agent_pose[0]  << "agent_pose[1] :  " << agent_pose[1]  << std::endl;
-		 agent_pose_vec.push_back(agent_pose);
+		 //std::cout<< " agent_attribute[0]  : " << agent_attribute[0]  << "agent_attribute[1] :  " << agent_attribute[1]  << std::endl;
+		 agent_attribute_vec.push_back(agent_attribute);
 	 }
 
 	 
@@ -93,8 +97,10 @@ void DynamicVoronoiRosUnitTest::testrun()
 	 unsigned char* densityPtr = this->read_density(density_array, density_img_dir, map_height,map_width);
    
      float DropOutToleranceRate = 0.2;
+	 
+	 bool work_eff_flag = true;
    
-	 DynamicVoronoi dynamicVoronoi(map_height, map_width, DropOutToleranceRate, weight_w, weight_h, lamda, false, false,densityPtr);
+	 DynamicVoronoi dynamicVoronoi(map_height, map_width, DropOutToleranceRate, weight_w, weight_h, lamda, false, work_eff_flag, false,densityPtr);
 	 
 	 std::string densitymap_dir = "/home/kangneoung/sw_repo/dynamic_voronoi/src/dynamic_voronoi/test/densitymap.txt";
 	 std::string agentmap_dir = "/home/kangneoung/sw_repo/dynamic_voronoi/src/dynamic_voronoi/test/agentmap.txt";
@@ -106,11 +112,11 @@ void DynamicVoronoiRosUnitTest::testrun()
 	 
      std::vector<std::vector<int>>::iterator iter;
 	 
-	 for (iter = agent_pose_vec.begin(); iter != agent_pose_vec.end(); iter++) {
+	 for (iter = agent_attribute_vec.begin(); iter != agent_attribute_vec.end(); iter++) {
 		
-		std::vector<int> agent_pose;
-		agent_pose = *iter;
-		dynamicVoronoi.PushPoint(agent_pose.at(0), agent_pose.at(1));
+		std::vector<int> agent_attribute;
+		agent_attribute = *iter;
+		dynamicVoronoi.PushPoint(agent_attribute.at(0), agent_attribute.at(1), agent_attribute.at(2), agent_attribute.at(3));   // agent_attribute.at(0)  is x_pose, agent_attribute.at(1)  is y_pose, agent_attribute.at(2)  is v_travel (pixel/time), agent_attribute.at(3)  is v_work (pixel/time)
      }   
 	 
 	 //dynamicVoronoi.PushPoint(15,15);
@@ -121,6 +127,7 @@ void DynamicVoronoiRosUnitTest::testrun()
 	 //dynamicVoronoi.PushPoint(70,70);
 	 //dynamicVoronoi.PushPoint(70,15);
 	 
+	 dynamicVoronoi.PushDatum(dataum_x, dataum_y);
 	 
 	 std::string img_anima_dir = "/home/kangneoung/sw_repo/dynamic_voronoi/src/dynamic_voronoi/test/animation/";
 	 std::string img_dir = "/home/kangneoung/sw_repo/dynamic_voronoi/src/dynamic_voronoi/test/map.png";
@@ -154,23 +161,23 @@ unsigned char* DynamicVoronoiRosUnitTest::read_density(unsigned char*  density_a
 	
 	cv::Mat mat_255(cv::Size(density_img_thresh.rows, density_img_thresh.cols), CV_8UC1, cv::Scalar(255));
 	
-	std::cout<< "debug 1" << "density_img_thresh.rows  : " << density_img_thresh.rows << " density_img_thresh.cols : "  << density_img_thresh.cols << " density_img_thresh.channels : "  << density_img_thresh.channels() << std::endl;
+	//std::cout<< "debug 1" << "density_img_thresh.rows  : " << density_img_thresh.rows << " density_img_thresh.cols : "  << density_img_thresh.cols << " density_img_thresh.channels : "  << density_img_thresh.channels() << std::endl;
 	
 	cv::Mat converted_density;
 	cv::absdiff(mat_255, density_img_thresh, converted_density);
 	
-	std::cout<< "debug 2" << std::endl;
+	//std::cout<< "debug 2" << std::endl;
 	cv::Mat density_resized;
 	cv::resize(converted_density, density_resized, cv::Size(height, width));
 	
-	std::cout<< "debug 3" << std::endl;
+	//std::cout<< "debug 3" << std::endl;
 	//cv::imshow("validation", density_resized);
 	//cv::waitKey(0);
 	
 	density_resized.convertTo(density_resized, CV_32FC1);
 	
 	
-	std::cout<< "debug 4" << std::endl;
+	//std::cout<< "debug 4" << std::endl;
 	for(int row=0; row<density_resized.rows; row++)  
 	{
       for(int col=0; col<density_resized.cols; col++)

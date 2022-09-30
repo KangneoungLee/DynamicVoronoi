@@ -15,17 +15,26 @@ std::vector<std::string> split(std::string str, char Delimiter) {
     return result;
 }
 
+float v_travel_sum = 0;
+float v_travel_avg = 0;
+float v_work_sum = 0;
+float v_work_avg = 0;
+float density_avg = 1;
 
 int propagation_frame_interval = 100;
 std::ofstream img_list;
+std::ofstream PartInfoTxt;
 
 bool is_optimize_animation = false;
 
 /*constructor and destructor*/
-DynamicVoronoi::DynamicVoronoi(unsigned short map_height, unsigned short map_width, float DropOutToleranceRate, float weight_w, float weight_h, float lamda, bool is_uniform_density, bool is_point_optimization, unsigned char* vorocellDenseMapExtPtr):
+DynamicVoronoi::DynamicVoronoi(unsigned short map_height, unsigned short map_width, float DropOutToleranceRate, float weight_w, float weight_h, float lamda, bool is_uniform_density, bool is_workeff_constraint, bool is_point_optimization, unsigned char* vorocellDenseMapExtPtr):
 map_height_(map_height),map_width_(map_width), DropOutToleranceRate_(DropOutToleranceRate), weight_w_(weight_w), weight_h_(weight_h), lamda_(lamda),
-is_uniform_density_(is_uniform_density), is_point_optimization_(is_point_optimization),vorocellDenseMapExtPtr_(vorocellDenseMapExtPtr)
+is_uniform_density_(is_uniform_density), is_workeff_constraint_(is_workeff_constraint), is_point_optimization_(is_point_optimization),vorocellDenseMapExtPtr_(vorocellDenseMapExtPtr)
 {
+	/* datum is for calculating the starting point of coverage*/
+	this->x_datum_ = 0;
+	this->y_datum_ = 0;
    /*c++ style */	
    this->vorocell_ = new VoroCell*[map_height*map_width];
    
@@ -35,7 +44,7 @@ is_uniform_density_(is_uniform_density), is_point_optimization_(is_point_optimiz
    
    this->vorocellDenseMap_ = new unsigned char[map_height*map_width];
    
-   
+   this->vorocellObsMap_ = new unsigned char[map_height*map_width];
    /*c style */
    //this->vorocell_ = (VoroCell*)malloc(sizeof(VoroCell)*((size_t)map_height)*((size_t)map_width));
    //this->vorocellDenseMap_ = (unsigned char*)malloc(sizeof(unsigned char)*((size_t)map_height)*((size_t)map_width));
@@ -43,6 +52,7 @@ is_uniform_density_(is_uniform_density), is_point_optimization_(is_point_optimiz
    this->is_propa_completed_ = false;
    this->VoroPartNum_ = 0;
    this->TotalArea_ = 0;
+   
    
    this->InitializeCell();
    this->InitializeDensityMap();
@@ -53,18 +63,37 @@ DynamicVoronoi::~DynamicVoronoi()
 	
 	 /*c++ style */	
 	 
-    for (int i = 0; i < this->map_height_*this->map_width_; ++i) {
-    delete this->vorocell_[i];
-    }
+	 for(int i =0; i <this->VoroPartNum_;i++)
+	 {
+		
+		 PartitionInfo* partition_info_single = this->partition_info_[i];
+		 PartInfoTxt << "agent_index : " << partition_info_single->part_agentclass_ << "\n";
+		 PartInfoTxt << "partition agent pos : " << partition_info_single->part_agent_coor_x_<< "(x) " << partition_info_single->part_agent_coor_y_<< "(y)" << "\n";
+		 PartInfoTxt << "partition centroid : " << partition_info_single->part_centroid_x_<< "(x) " << partition_info_single->part_centroid_y_<< "(y)" << "\n";
+		 PartInfoTxt << "startng point : " << partition_info_single->StartingPt[0] << "(x) " << partition_info_single->StartingPt[1] << "(y)" << "\n";
+		 PartInfoTxt << "area : " << partition_info_single->part_area << "\n";
+		 PartInfoTxt << "v_travel : " << partition_info_single->part_v_travel_ << "\n";
+		 PartInfoTxt << "v_work : " << partition_info_single->part_v_work_ << "\n";
+		
+	 }
+	 
+	 
+	 
+     for (int i = 0; i < this->map_height_*this->map_width_; ++i) {
+     delete this->vorocell_[i];
+     }
 	
-    for (int i = 0; i < this->VoroPartNum_; ++i) {
-    delete this->partition_info_[i];
-    }	
+     for (int i = 0; i < this->VoroPartNum_; ++i) {
+     delete this->partition_info_[i];
+     }	
 	 
+	 img_list.close();
+	 PartInfoTxt.close();
 	 
-	delete[] this->vorocell_;
-	delete[] this->vorocellDenseMap_;
-	delete[] this->partition_info_;
+	 delete[] this->vorocell_;
+	 delete[] this->vorocellDenseMap_;
+	 delete[] this->partition_info_;
+	 delete[] this->vorocellObsMap_;
 	/*c style */
 	//free(this->vorocell_);
 	//free(this->vorocellDenseMap_);
@@ -74,7 +103,7 @@ int DynamicVoronoi::GetIndex(int x, int y)
 {
 	if((x>=this->map_width_)||(y>=this->map_height_))
 	{
-		std::cout<<"x or y index is out of bound in DynamicVoronoi"<<std::endl;
+		std::cout<<"x or y index is out of bound in DynamicVoronoi :" << " x : " << x << " y : " << y <<std::endl;
 		exit(0);
 	}
 	
@@ -107,8 +136,17 @@ VoroCell* DynamicVoronoi::GetSingleCellByPoint(float x, float y)
 	return  this->vorocell_[index];
 };
 
-bool DynamicVoronoi::PushPoint(float x, float y)
+bool DynamicVoronoi::PushDatum(float x_datum, float y_datum)
 {
+	/* datum is for calculating the starting point of coverage*/
+	x_datum_ = x_datum;
+	y_datum_ = y_datum;
+	
+}
+
+bool DynamicVoronoi::PushPoint(float x, float y, float v_travel, float v_work)
+{
+	/* add agent's parameter set (for example, agent position, velocity.. etc*/
 	
 	if(x >= this->map_width_)
 	{
@@ -120,6 +158,15 @@ bool DynamicVoronoi::PushPoint(float x, float y)
 		return false;
 	}
 	
+	if(v_travel < 0.01)
+	{
+		v_travel = 0.01;
+	}
+	
+	if(v_work < 0.01)
+	{
+		v_work = 0.01;
+	}	
 	
 	if(this->VoroPartNum_ == 0)
 	{
@@ -155,8 +202,12 @@ bool DynamicVoronoi::PushPoint(float x, float y)
 	partition_info_single->part_area = 0;
 	partition_info_single->part_centroid_x_ = 0;
 	partition_info_single->part_centroid_y_ = 0;
+	partition_info_single->part_agent_init_x_ = x;
+	partition_info_single->part_agent_init_y_ = y;
 	partition_info_single->part_agent_coor_x_ = x;
 	partition_info_single->part_agent_coor_y_ = y;
+	partition_info_single->part_v_travel_ = v_travel;
+	partition_info_single->part_v_work_ = v_work;
 	partition_info_single->agent_parllel_momentsum_x_ = 0;
 	partition_info_single->agent_parllel_momentsum_y_ = 0;
 
@@ -179,6 +230,12 @@ bool DynamicVoronoi::PushPoint(float x, float y)
 	
 	this->inhibit_dropout_ = false;
 	this->inhibit_dropout_cnt = 0;
+	
+	
+	v_travel_sum = v_travel + v_travel_sum;
+	v_work_sum = v_work + v_work_sum;
+	v_travel_avg = v_travel_sum/this->VoroPartNum_;
+	v_work_avg = v_work_sum/this->VoroPartNum_;
 	
 	return true;
 }
@@ -332,6 +389,16 @@ bool DynamicVoronoi::Colorized(std::string img_save_dir, std::string label_txt_d
 		labelImg.at<cv::Vec3b>(agent_cen_y,agent_cen_x)[0] = 0;
 		labelImg.at<cv::Vec3b>(agent_cen_y,agent_cen_x)[1] = 0;
 		labelImg.at<cv::Vec3b>(agent_cen_y,agent_cen_x)[2] = 0;
+		
+		
+		unsigned short StartingPt_x = (unsigned short)std::round(partition_info_single->StartingPt[0]);
+		unsigned short StartingPt_y = (unsigned short)std::round(partition_info_single->StartingPt[1]);
+		
+		cv::rectangle( labelImg, cv::Point( StartingPt_x - 1, StartingPt_y - 1), cv::Point( StartingPt_x + 1, StartingPt_y + 1), cv::Scalar( 255, 255, 255 ), cv::FILLED, cv::LINE_8);
+		
+		labelImg.at<cv::Vec3b>(StartingPt_y,StartingPt_x)[0] = 0;
+		labelImg.at<cv::Vec3b>(StartingPt_y,StartingPt_x)[1] = 0;
+		labelImg.at<cv::Vec3b>(StartingPt_y,StartingPt_x)[2] = 0;
 
 	}
 
@@ -401,6 +468,7 @@ bool DynamicVoronoi::saveSingleVoro(std::string file_name, int x, int y)
 void DynamicVoronoi::InitializeDensityMap()
 {
 	int x,y;
+	int area_wo_density = 0;
 	unsigned char density;
 	
 	if((this->is_uniform_density_ == true)||(this->vorocellDenseMapExtPtr_ == NULL))
@@ -414,32 +482,57 @@ void DynamicVoronoi::InitializeDensityMap()
 			    this->vorocellDenseMap_[index] = density;
 			
 			    this->TotalArea_ = this->TotalArea_ + density;
+				
+				if(density <= 0)
+				{
+					this->vorocellObsMap_[index] = 1;
+				}
+				else
+				{
+					this->vorocellObsMap_[index] = 0;
+				}
 		   }	
 	   }
+	   
+	   density_avg = 1;
+	   
 	}
 	else
 	{
 		memcpy(this->vorocellDenseMap_, this->vorocellDenseMapExtPtr_, sizeof(unsigned char)*(this->map_height_)*(this->map_width_));
 		//directly memcopy;
 		
-		for(int row=0; row<map_height_; row++)  
+		/* for(int row=0; row<map_height_; row++)  
 	     {
          for(int col=0; col<map_width_; col++)
 	     {
 		   int index =col + row*map_width_;		   
-		   //std::cout<<" row: "<< row << " col: "<< col << " index: "<< index << " vorocellDenseMap_[index] : "<< (float)vorocellDenseMap_[index]  <<std::endl;
+		   std::cout<<" row: "<< row << " col: "<< col << " index: "<< index << " vorocellDenseMap_[index] : "<< (float)vorocellDenseMap_[index]  <<std::endl;
 	     }
-	     }
+	     }*/
 		
 		for(x= 0;x<this->map_width_;x++)
 		{
 			for(y=0;y<this->map_height_;y++)
 			{
 				density = this->GetDensity(x,y);
+				int index = this->GetIndex(x, y);
 				//std::cout<<" row: "<< y << " col: "<< x << " density: "<< (float)density <<std::endl;
 				this->TotalArea_ = this->TotalArea_ + density;
+				area_wo_density = area_wo_density + 1;
+				if(density <= 0)
+				{
+					this->vorocellObsMap_[index] = 1;
+				}
+				else
+				{
+					this->vorocellObsMap_[index] = 0;
+				}
+				
 			}
 		}
+		
+	    density_avg = 	this->TotalArea_/area_wo_density;
 	}
 	
 	this->inhibit_dropout_ = false;
@@ -452,6 +545,29 @@ void DynamicVoronoi::UpdateDensityMap(unsigned char* vorocellDenseMapExtPtr)
 {
 	memcpy(this->vorocellDenseMap_, vorocellDenseMapExtPtr, sizeof(unsigned char)*(this->map_height_)*(this->map_width_));
     //memcopy
+	
+	this->TotalArea_ = 0;
+	
+	for(int x= 0;x<this->map_width_;x++)
+	{
+		for(int y=0;y<this->map_height_;y++)
+		{
+			unsigned char  density = this->GetDensity(x,y);
+			int index = this->GetIndex(x, y);
+			//std::cout<<" row: "<< y << " col: "<< x << " density: "<< (float)density <<std::endl;
+			this->TotalArea_ = this->TotalArea_ + density;
+				
+			if(density <= 0)
+			{
+				this->vorocellObsMap_[index] = 1;
+			}
+			else
+			{
+				this->vorocellObsMap_[index] = 0;
+			}
+				
+		}
+	}
 }
 
 unsigned char DynamicVoronoi::GetDensity(int x, int y)
@@ -471,6 +587,8 @@ void DynamicVoronoi::MainOptProcess(bool is_optimize_animation, std::string img_
 	   std::string list_dir = img_dir + "img_file_list.txt";
 	   img_list.open(list_dir);   
 	}
+	std::string  info_dir = img_dir + "partition_info.txt";
+	PartInfoTxt.open(info_dir);
 	
 	for(int i = 0; i < max_step_size; i++)
 	{
@@ -542,19 +660,53 @@ void DynamicVoronoi::MainOptProcess(bool is_optimize_animation, std::string img_
 		   this->InitializeCell();
 	   }
 	   
+	   float error_temp2;
+	   
 	   if ((error <= terminate_criteria)&&(this->dropout_active_ == false)) 
 	   {
-		   this->ExpandedVoronoi();
-		   
-		   	if(is_optimize_animation == true)
-	       {
-		   	   std::string img_save_dir = img_dir + "map" + std::to_string(i+1) +".png";
-			   this->Colorized(img_save_dir,label_dir);
-			   img_list<<"map" + std::to_string(i+1) +".png"<<std::endl;
-	       }
-		   
-		   std::cout<<" MainOptProcess : terminate criteria is satisfied " << std::endl;
-		   break;
+		     if(this->is_workeff_constraint_)
+		     {
+			     for (int j = 0; j < 10; j ++)
+			     {
+				   	 this->ExpandedVoronoi(false, this->is_workeff_constraint_);
+		             this->CentroidCal();
+		             error_temp2 = this->MoveAgents();
+
+					 
+					 std::string img_save_dir = img_dir + "map_work_eff" + std::to_string(i+j+1) +".png";
+			         this->Colorized(img_save_dir,label_dir);
+			         img_list<<"map" + std::to_string(i+j+1) +".png"<<std::endl;
+					 
+					 this->InitializeCell();
+										 
+					 if(error_temp2<terminate_criteria)
+					 {
+						 this->ExpandedVoronoi();
+			   	         std::string img_save_dir = img_dir + "map_work_eff" + std::to_string(i+j+1+1) +".png";
+			             this->Colorized(img_save_dir,label_dir);
+			             img_list<<"map" + std::to_string(i+j+1+1) +".png"<<std::endl;
+						 break;
+					 }
+					
+
+					
+			     }
+			   
+
+		     }
+		     else
+		     {
+		         this->ExpandedVoronoi();
+			     if(is_optimize_animation == true)
+	             {
+		   	         std::string img_save_dir = img_dir + "map" + std::to_string(i+1) +".png";
+			         this->Colorized(img_save_dir,label_dir);
+			         img_list<<"map" + std::to_string(i+1) +".png"<<std::endl;
+	             }
+		     }
+		   		   
+		     std::cout<<" MainOptProcess : terminate criteria is satisfied " << std::endl;
+		     break;
 	   }
 	   
 	   this->dropout_active_ = false;
@@ -565,18 +717,32 @@ void DynamicVoronoi::MainOptProcess(bool is_optimize_animation, std::string img_
 
 }
 
-bool DynamicVoronoi::ExpandedVoronoi(bool is_propagation_animation, std::string img_dir, std::string label_dir)
+
+bool DynamicVoronoi::ExpandedVoronoi(bool is_propagation_animation, bool is_workeff_constraint, std::string img_dir, std::string label_dir)
 {
 	int agent_index;
 	VoroCell* vorocell_temp;
-	
+
 	std::cout<<" ******************** DynamicVoronoi::ExpandedVoronoi start ******************* " << std::endl;
 	
 	for(int i =0; i <this->VoroPartNum_;i++)
 	{
+		
+		float v_travel;
+	    float v_work;
+		int StartingPt_x;
+		int StartingPt_y;
+		
 		PartitionInfo* partition_info_single = this->partition_info_[i];
 		agent_index = partition_info_single->part_agentclass_;
-
+		v_travel = partition_info_single->part_v_travel_;
+		v_work = partition_info_single->part_v_work_;
+		int area = partition_info_single->part_area;
+		float init_pos_x = partition_info_single->part_agent_init_x_;
+		float init_pos_y = partition_info_single->part_agent_init_y_;
+		StartingPt_x = partition_info_single->StartingPt[0];
+		StartingPt_y = partition_info_single->StartingPt[1];
+		
 	    /* agentDropoutCheck == true means that the agent should be ignored when propagating */ 
 		if(this->agentDropoutCheck_[agent_index] == true)
 		{
@@ -600,7 +766,7 @@ bool DynamicVoronoi::ExpandedVoronoi(bool is_propagation_animation, std::string 
 		int row = vorocell_temp->row_index_; // equavalent to y
 				
 		// Propagate the cells from the initial cell for each agent
-        this->Propagatation(agent_index, agent_cen_x, agent_cen_y, col, row);		
+        this->Propagatation(agent_index, agent_cen_x, agent_cen_y, col, row, StartingPt_x, StartingPt_y, init_pos_x, init_pos_y, v_travel, v_work, area, is_workeff_constraint);		
 	}
 
 
@@ -633,6 +799,16 @@ bool DynamicVoronoi::ExpandedVoronoi(bool is_propagation_animation, std::string 
 	
 		agent_index = vorocell_temp->agentclass_;
 		
+		PartitionInfo* partition_info_single = this->partition_info_[agent_index];
+		
+		float v_travel = partition_info_single->part_v_travel_;
+	    float v_work = partition_info_single->part_v_work_;
+		float init_pos_x = partition_info_single->part_agent_init_x_;
+		float init_pos_y = partition_info_single->part_agent_init_y_;
+		int StartingPt_x = partition_info_single->StartingPt[0];
+		int StartingPt_y = partition_info_single->StartingPt[1];
+		int area = partition_info_single->part_area;
+		
 		/* agentDropoutCheck == true means that the agent should be ignored when propagating */ 
 		if(this->agentDropoutCheck_[agent_index] == true)
 		{
@@ -643,7 +819,7 @@ bool DynamicVoronoi::ExpandedVoronoi(bool is_propagation_animation, std::string 
 		int row = vorocell_temp->row_index_; // equavalent to y
 		
 		// Propagate the cells from the initial cell for each agent
-        this->Propagatation(agent_index, agent_cen_x, agent_cen_y, col, row);
+        this->Propagatation(agent_index, agent_cen_x, agent_cen_y, col, row, StartingPt_x, StartingPt_y, init_pos_x, init_pos_y, v_travel, v_work, area, is_workeff_constraint);
 		
 		if((is_propagation_animation==true)&&((i%propagation_frame_interval) == 0))
 		{	
@@ -671,18 +847,45 @@ bool DynamicVoronoi::ExpandedVoronoi(bool is_propagation_animation, std::string 
 
 }
 
-void DynamicVoronoi::Propagatation(int agent_index, unsigned short agent_cen_x, unsigned short agent_cen_y, int col, int row)
+void DynamicVoronoi::Propagatation(int agent_index, unsigned short agent_cen_x, unsigned short agent_cen_y, int col, int row, int StartingPt_x, int StartingPt_y, float init_pos_x, float init_pos_y, float v_travel, float v_work, int area, bool is_workeff_constraint)
 {
 	VoroCell* vorocell_temp;
 	std::vector<int> queue_xy;
      
+	 float vel_cost;
+	 float work_cost;
+	 float travel_time;
+	 float work_time;
+	 
+	 if (is_workeff_constraint == true)
+     {
+		 
+		 travel_time = (std::abs(StartingPt_x - init_pos_x) + std::abs(StartingPt_y - init_pos_y))/v_travel;
+		 work_time = (area/density_avg)/v_work;
+		 
+		 vel_cost = travel_time*v_travel_avg*5;
+		 work_cost = 0; //work_cost = work_time*v_work_avg/3;
+		 
+		 
+		 
+		 std::cout<<" travel_dis : "<<(std::abs(StartingPt_x - init_pos_x) + std::abs(StartingPt_y - init_pos_y)) <<" v_travel : "<<v_travel<<" v_travel_avg : "<<v_travel_avg<<"vel_cost : "<<vel_cost<<std::endl;
+		 std::cout<<" area : "<<area<<"density_avg : "<<density_avg<<" v_work : "<<v_work<<" v_work_avg : "<<v_work_avg<<"work_cost : "<<work_cost<<std::endl;
+	 }
+	 else
+	 {
+		 vel_cost = 0;
+		 work_cost = 0;
+	 }
    
 	 // check if the column (or x ) is out of left bound
      if(col>0)
 	 {
 		vorocell_temp = GetSingleCellByIndex(col-1, row);
-			
-		float sq_dist_new = weight_w_*(agent_cen_x - (col - 1))*(agent_cen_x - (col - 1)) + weight_h_*(agent_cen_y - row)*(agent_cen_y - row);
+		
+		//int ObsPathPenalty = 0;
+		int ObsPathPenalty = CulObsCell(agent_cen_x, agent_cen_y, col-1, row);
+		
+		float sq_dist_new = weight_w_*(agent_cen_x - (col - 1))*(agent_cen_x - (col - 1)) + weight_h_*(agent_cen_y - row)*(agent_cen_y - row) + lamda_*ObsPathPenalty*ObsPathPenalty + vel_cost + work_cost;
 			
 		if(vorocell_temp->state_ == init)
 		{
@@ -697,7 +900,7 @@ void DynamicVoronoi::Propagatation(int agent_index, unsigned short agent_cen_x, 
 			queue_xy.clear();		
 		}
 		else
-		 {
+		{
 			if(vorocell_temp->sq_dist_ >sq_dist_new)
 			{
 			   vorocell_temp->is_edge_ = false;
@@ -724,15 +927,18 @@ void DynamicVoronoi::Propagatation(int agent_index, unsigned short agent_cen_x, 
 				//vorocell_temp->is_edge_ = true;
 				//std::cout<<"line 569"<<" col :"<<col-1<<" row :"<<row<<std::endl;
 			}
-		 }	
+		}	
 	 }
 		
 	// check if the column (or x ) is out of right bound
 	if(col<(this->map_width_ -1))
 	{
 		vorocell_temp = GetSingleCellByIndex(col+1, row);
+		
+		//int ObsPathPenalty = 0;
+		int ObsPathPenalty = CulObsCell(agent_cen_x, agent_cen_y, col+1, row);
 			
-		float sq_dist_new = weight_w_*(agent_cen_x - (col + 1))*(agent_cen_x - (col + 1)) + weight_h_*(agent_cen_y - row)*(agent_cen_y - row);
+		float sq_dist_new = weight_w_*(agent_cen_x - (col + 1))*(agent_cen_x - (col + 1)) + weight_h_*(agent_cen_y - row)*(agent_cen_y - row) + lamda_*ObsPathPenalty*ObsPathPenalty + vel_cost + work_cost;
 
 		if(vorocell_temp->state_ == init)
 		{
@@ -782,7 +988,10 @@ void DynamicVoronoi::Propagatation(int agent_index, unsigned short agent_cen_x, 
 	{
 		vorocell_temp = GetSingleCellByIndex(col, row-1);
 
-		float sq_dist_new = weight_w_*(agent_cen_x - col)*(agent_cen_x - col) + weight_h_*(agent_cen_y - (row - 1))*(agent_cen_y - (row - 1));
+        //int ObsPathPenalty = 0;
+		int ObsPathPenalty = CulObsCell(agent_cen_x, agent_cen_y, col, row-1);
+
+		float sq_dist_new = weight_w_*(agent_cen_x - col)*(agent_cen_x - col) + weight_h_*(agent_cen_y - (row - 1))*(agent_cen_y - (row - 1)) + lamda_*ObsPathPenalty*ObsPathPenalty + vel_cost + work_cost;
 
 		if(vorocell_temp->state_ == init)
 		{
@@ -830,8 +1039,11 @@ void DynamicVoronoi::Propagatation(int agent_index, unsigned short agent_cen_x, 
 	if(row<(this->map_height_-1))
 	{
 		vorocell_temp = GetSingleCellByIndex(col, row+1);
-			
-		float sq_dist_new = weight_w_*(agent_cen_x - col)*(agent_cen_x - col) + weight_h_*(agent_cen_y - (row + 1))*(agent_cen_y - (row + 1));
+		
+		//int ObsPathPenalty = 0;
+        int ObsPathPenalty = CulObsCell(agent_cen_x, agent_cen_y, col, row+1);
+		
+		float sq_dist_new = weight_w_*(agent_cen_x - col)*(agent_cen_x - col) + weight_h_*(agent_cen_y - (row + 1))*(agent_cen_y - (row + 1)) + lamda_*ObsPathPenalty*ObsPathPenalty + vel_cost + work_cost;
 			
 		if(vorocell_temp->state_ == init)
 		{
@@ -902,7 +1114,10 @@ void DynamicVoronoi::CentroidCal()
 		partition_info_single->LeftRearPtDis = this->map_width_ + this->map_height_;
 		partition_info_single->RightRearPt[0] = 0;
 		partition_info_single->RightRearPt[1] = 0;
-		partition_info_single->RightRearPtDis = this->map_width_+ this->map_height_;			
+		partition_info_single->RightRearPtDis = this->map_width_+ this->map_height_;		
+		partition_info_single->StartingPt[0] = 0;
+		partition_info_single->StartingPt[1] = 0;
+		partition_info_single->StartingPtDis = this->map_width_+ this->map_height_;			
 	}
 
     /* calcuate variables for centroid  */
@@ -916,41 +1131,54 @@ void DynamicVoronoi::CentroidCal()
 			if(agentclass == 0xFFFF) continue;
 			
 			PartitionInfo* partition_info_single = this->partition_info_[agentclass];
-			partition_info_single->part_area = partition_info_single->part_area + 1*GetDensity(col, row); 
-			partition_info_single->centroid_momentsum_x_ = partition_info_single->centroid_momentsum_x_ + col*1*GetDensity(col, row);
-			partition_info_single->centroid_momentsum_y_ = partition_info_single->centroid_momentsum_y_ + row*1*GetDensity(col, row);
+			unsigned char density_temp = GetDensity(col, row);
+			partition_info_single->part_area = partition_info_single->part_area + 1*density_temp; 
+			partition_info_single->centroid_momentsum_x_ = partition_info_single->centroid_momentsum_x_ + col*1*density_temp;
+			partition_info_single->centroid_momentsum_y_ = partition_info_single->centroid_momentsum_y_ + row*1*density_temp;
 			
 			/*calculate points close to each corners */ /* using Manhattan distance to reduce the computation cost*/
-			int LeftFrontPtDisTemp = (col - 0) + (row - 0);			
-			if(LeftFrontPtDisTemp <= partition_info_single->LeftFrontPtDis)  
-			{
-				partition_info_single->LeftFrontPtDis = LeftFrontPtDisTemp;
-				partition_info_single->LeftFrontPt[0] = col;
-				partition_info_single->LeftFrontPt[1] = row;
-			}
 			
-			int RightFrontPtDisTemp = (this->map_width_ - col) + (row - 0);			
-			if(RightFrontPtDisTemp <= partition_info_single->RightFrontPtDis)  
+			if(density_temp > 0)
 			{
-				partition_info_single->RightFrontPtDis = RightFrontPtDisTemp;
-				partition_info_single->RightFrontPt[0] = col;
-				partition_info_single->RightFrontPt[1] = row;
-			}				
+			   int LeftFrontPtDisTemp = (col - 0) + (row - 0);			
+			   if(LeftFrontPtDisTemp <= partition_info_single->LeftFrontPtDis)  
+			   {
+				   partition_info_single->LeftFrontPtDis = LeftFrontPtDisTemp;
+				   partition_info_single->LeftFrontPt[0] = col;
+				   partition_info_single->LeftFrontPt[1] = row;
+			   }
+			
+			   int RightFrontPtDisTemp = (this->map_width_ - col) + (row - 0);			
+			   if(RightFrontPtDisTemp <= partition_info_single->RightFrontPtDis)  
+			   {
+				   partition_info_single->RightFrontPtDis = RightFrontPtDisTemp;
+				   partition_info_single->RightFrontPt[0] = col;
+				   partition_info_single->RightFrontPt[1] = row;
+			   }				
 
-			int LeftRearPtDisTemp = (col - 0) + (this->map_height_ - row);			
-			if(LeftRearPtDisTemp <= partition_info_single->LeftRearPtDis)  
-			{
-				partition_info_single->LeftRearPt[0] = col;
-				partition_info_single->LeftRearPt[1] = row;
-				partition_info_single->LeftRearPtDis = LeftRearPtDisTemp;				
-			}
+			   int LeftRearPtDisTemp = (col - 0) + (this->map_height_ - row);			
+			   if(LeftRearPtDisTemp <= partition_info_single->LeftRearPtDis)  
+			   {
+				   partition_info_single->LeftRearPt[0] = col;
+				   partition_info_single->LeftRearPt[1] = row;
+				   partition_info_single->LeftRearPtDis = LeftRearPtDisTemp;				
+			   }
 
-			int RightRearPtDisTemp = (this->map_width_ - col) + (this->map_height_ - row);			
-			if(RightRearPtDisTemp <= partition_info_single->RightRearPtDis)  
-			{
-				partition_info_single->RightRearPt[0] = col;
-				partition_info_single->RightRearPt[1] = row;
-				partition_info_single->RightRearPtDis = RightRearPtDisTemp;				
+			   int RightRearPtDisTemp = (this->map_width_ - col) + (this->map_height_ - row);			
+			   if(RightRearPtDisTemp <= partition_info_single->RightRearPtDis)  
+			   {
+				   partition_info_single->RightRearPt[0] = col;
+				   partition_info_single->RightRearPt[1] = row;
+				   partition_info_single->RightRearPtDis = RightRearPtDisTemp;				
+			   }
+			
+			   int StartingPtDisTemp = std::abs(this->x_datum_ - col) + std::abs(this->y_datum_ - row);			
+			   if(StartingPtDisTemp <= partition_info_single->StartingPtDis)  
+			   {
+				   partition_info_single->StartingPt[0] = col;
+				   partition_info_single->StartingPt[1] = row;
+				   partition_info_single->StartingPtDis = StartingPtDisTemp;				
+			   }
 			}
 			
 		}
@@ -1062,7 +1290,7 @@ float DynamicVoronoi::MoveAgents()
 			{
 				coefficient = min_coeff;
 			}
-			
+			coefficient = min_coeff;
 		    agent_coor_x = agent_coor_x - 2*coefficient*(agent_coor_x - centroid_x);     
 		    agent_coor_y = agent_coor_y - 2*coefficient*(agent_coor_y - centroid_y);
 					/*boundary check*/
@@ -1134,6 +1362,85 @@ float DynamicVoronoi::MoveAgents()
 	return error;
 }
 
+int DynamicVoronoi::CulObsCell(unsigned short agent_cen_x, unsigned short agent_cen_y, int col, int row)
+{
+
+	float increment_x;
+	float increment_y;	
+	int sign_conv;
+	int CulObs = 0;
+	
+	 if(((col - agent_cen_x)<1)&&((col - agent_cen_x)>-1)&&((row - agent_cen_y)<1)&&((row - agent_cen_y)>-1)) //prevent singularity
+	 {
+		   return CulObs;
+	  }
+	
+     if(std::abs(row - agent_cen_y) > std::abs(col - agent_cen_x))
+     {
+		 increment_x = (col - agent_cen_x)/(row - agent_cen_y);
+		 
+		 if((row - agent_cen_y) >= 0)
+	     { 
+		     increment_y = 1;
+			 sign_conv = 1;
+	     }
+	     else
+	     {
+		     increment_y = -1;
+			 sign_conv = -1;
+	     }
+		 
+		 float pos_x = agent_cen_x;
+		 
+	     for(float pos_y = agent_cen_y; (row - pos_y)*sign_conv > 0;)
+	     {
+		     pos_x = pos_x + increment_x;
+		     pos_y = pos_y + increment_y;
+		
+		     if((pos_x < 0)||(pos_x >= this->map_width_)||(pos_y < 0)||(pos_y >= this->map_height_))
+		     {
+			     continue;
+		     }
+		
+		     int index = this->GetIndex((int)std::round(pos_x), (int)std::round(pos_y));		
+		     CulObs = CulObs + this->vorocellObsMap_[index]; 		 
+	     }
+     }
+     else
+     {
+		 increment_y = (row - agent_cen_y)/(col - agent_cen_x);
+		 
+		 if((col - agent_cen_x) >= 0)
+	     { 
+		     increment_x = 1;
+			 sign_conv = 1;
+	     }
+	     else
+	     {
+		     increment_x = -1;
+			 sign_conv = -1;
+	     }
+		 
+		 float pos_y = agent_cen_y;
+		 
+	     for(float pos_x = agent_cen_x; (col - pos_x)*sign_conv > 0;)
+	     {
+		     pos_x = pos_x + increment_x;
+		     pos_y = pos_y + increment_y;
+		
+		     if((pos_x < 0)||(pos_x >= this->map_width_)||(pos_y < 0)||(pos_y >= this->map_height_))
+		     {
+			     continue;
+		     }
+		
+		     int index = this->GetIndex((int)std::round(pos_x), (int)std::round(pos_y));		
+		     CulObs = CulObs + this->vorocellObsMap_[index]; 		 
+	     }
+     }		 
+
+		
+	return CulObs;
+}
 
 void DynamicVoronoi::AgentPosPostCheck(PartitionInfo* partition_info_single)
 {

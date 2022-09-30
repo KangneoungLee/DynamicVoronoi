@@ -44,8 +44,12 @@ class PartitionInfo{
 	   float centroid_momentsum_y_;
 	   float part_centroid_x_;
 	   float part_centroid_y_; 
+	   float part_agent_init_x_;
+	   float part_agent_init_y_;
 	   float part_agent_coor_x_;
 	   float part_agent_coor_y_;
+	   float part_v_travel_;
+	   float part_v_work_;
 	   float agent_parllel_momentsum_x_;
 	   float agent_parllel_momentsum_y_;
 	   int LeftFrontPt[2];
@@ -55,7 +59,9 @@ class PartitionInfo{
 	   int LeftRearPt[2];
 	   int LeftRearPtDis;
 	   int RightRearPt[2];
-	   int RightRearPtDis;	   
+	   int RightRearPtDis;
+	   int StartingPt[2];
+	   int StartingPtDis;	
 	   
 	
 	/*constructor and destructor*/
