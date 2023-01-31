@@ -72,7 +72,13 @@ void DynamicVoronoiRosUnitTest::testrun()
 	 float dataum_x = 1;
 	 float dataum_y = 1;
 	 float lamda = 0;
+	 int no_agent_internal_param = 4;
 	 
+	bool is_hete_cov_radius = false;
+	bool is_dropout_use = true;
+	bool is_propa_connected_area = false;
+	bool is_img_save = false;
+	
 	 std::vector<std::vector<int> > agent_attribute_vec;
 	 XmlRpc::XmlRpcValue agent_attribute_list;
 	 
@@ -87,18 +93,23 @@ void DynamicVoronoiRosUnitTest::testrun()
 	 param_nh_.getParam("dataum_x",dataum_x);
 	 param_nh_.getParam("dataum_y",dataum_y);
 	 param_nh_.getParam("lamda",lamda);
+	 param_nh_.getParam("is_hete_cov_radius",is_hete_cov_radius);
+	 param_nh_.getParam("is_dropout_use",is_dropout_use);
+	 param_nh_.getParam("is_img_save",is_img_save);
+	 param_nh_.getParam("is_propa_connected_area",is_propa_connected_area);
+	 param_nh_.getParam("no_agent_internal_param",no_agent_internal_param);
 	 
 	 ROS_ASSERT(agent_attribute_list.getType() == XmlRpc::XmlRpcValue::TypeArray);
 	 
 	 for (int i = 0; i < agent_num; i++)
 	 {
 		 std::vector<int> agent_attribute;
-		 for (int j =0; j< 4; j++)
+		 for (int j =0; j< no_agent_internal_param; j++)
 		 {
 			 // These matrices can cause problems if all the types
 			 // aren't specified with decimal points. Handle that
 		    std::ostringstream ostr;
-            ostr << agent_attribute_list[4 * i + j];    
+            ostr << agent_attribute_list[no_agent_internal_param * i + j];    
 			std::istringstream istr(ostr.str()); // istringstream parses the data corresponding to the data type
 			
 			int value_temp;
@@ -121,11 +132,14 @@ void DynamicVoronoiRosUnitTest::testrun()
    
 	 unsigned char* densityPtr = this->read_density(density_array, density_img_dir, map_height,map_width);
    
-     float DropOutToleranceRate = 0.2;
+     float DropOutWeight = (float)10/(float)9;  //1.2
 	 
-	 bool work_eff_flag = true;
-   
-	 DynamicVoronoi dynamicVoronoi(map_height, map_width, DropOutToleranceRate, weight_w, weight_h, lamda, false, work_eff_flag, false,densityPtr);
+	 bool is_uniform_density = false;
+	 
+	 bool work_eff_flag = false;
+
+
+	 DynamicVoronoi dynamicVoronoi(map_height, map_width, DropOutWeight, weight_w, weight_h, lamda, is_uniform_density, is_dropout_use, work_eff_flag, is_hete_cov_radius, is_propa_connected_area, is_img_save, densityPtr);
 	 
 	 std::string densitymap_dir = "/home/kangneoung/sw_repo/dynamic_voronoi/src/dynamic_voronoi/test/densitymap.txt";
 	 std::string agentmap_dir = "/home/kangneoung/sw_repo/dynamic_voronoi/src/dynamic_voronoi/test/agentmap.txt";
@@ -141,8 +155,12 @@ void DynamicVoronoiRosUnitTest::testrun()
 		
 		std::vector<int> agent_attribute;
 		agent_attribute = *iter;
-		dynamicVoronoi.PushPoint(agent_attribute.at(0), agent_attribute.at(1), agent_attribute.at(2), agent_attribute.at(3));   // agent_attribute.at(0)  is x_pose, agent_attribute.at(1)  is y_pose, agent_attribute.at(2)  is v_travel (pixel/time), agent_attribute.at(3)  is v_work (pixel/time)
-     }   
+		if(no_agent_internal_param == 4)
+		{
+			dynamicVoronoi.PushPoint(agent_attribute.at(0), agent_attribute.at(1), agent_attribute.at(2), agent_attribute.at(3));   // agent_attribute.at(0)  is x_pose, agent_attribute.at(1)  is y_pose, agent_attribute.at(2)  is v_travel (pixel/time), agent_attribute.at(3)  is v_work (pixel/time)
+        }
+		else if(no_agent_internal_param == 5) dynamicVoronoi.PushPoint(agent_attribute.at(0), agent_attribute.at(1), agent_attribute.at(2), agent_attribute.at(3), agent_attribute.at(4)); 
+	 }
 	 
 	 //dynamicVoronoi.PushPoint(15,15);
 	 //dynamicVoronoi.PushPoint(15,30);
@@ -161,7 +179,7 @@ void DynamicVoronoiRosUnitTest::testrun()
 	 
 	 bool is_optimize_animation = true;
 	 
-	 dynamicVoronoi.MainOptProcess(is_optimize_animation, img_anima_opt_dir, label_dir, 300, 0.1);
+	 dynamicVoronoi.MainOfflineProcess(is_optimize_animation, img_anima_opt_dir, label_dir, 100, 0.001);
 	 
 	 //bool is_propagation_animation = true;
 	 
@@ -185,7 +203,7 @@ unsigned char* DynamicVoronoiRosUnitTest::read_density(unsigned char*  density_a
     density_img_thresh = density_img.clone();
 	
 	cv::Mat mat_255(cv::Size(density_img_thresh.rows, density_img_thresh.cols), CV_8UC1, cv::Scalar(255));
-	
+
 	//std::cout<< "debug 1" << "density_img_thresh.rows  : " << density_img_thresh.rows << " density_img_thresh.cols : "  << density_img_thresh.cols << " density_img_thresh.channels : "  << density_img_thresh.channels() << std::endl;
 	
 	cv::Mat converted_density;

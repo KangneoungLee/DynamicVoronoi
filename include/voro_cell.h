@@ -64,7 +64,9 @@ class PartitionInfo{
 	private:
 	
 	public:
-	   float part_area;
+	   float part_mass_;
+	   float part_area_;
+	   float part_radius_in_area_;
 	   unsigned short part_agentclass_;
 	   float centroid_momentsum_x_;
 	   float centroid_momentsum_y_;
@@ -76,6 +78,7 @@ class PartitionInfo{
 	   float part_agent_coor_y_;
 	   float part_v_travel_;
 	   float part_v_work_;
+	   float part_cov_radius_;
 	   float agent_parllel_momentsum_x_;
 	   float agent_parllel_momentsum_y_;
 	   int LeftFrontPt[2];

@@ -48,7 +48,7 @@ SOFTWARE.
 
 #include "dynamic_voronoi/voro_cell.h"
 
-
+#define PI 3.14159265
 
 class DynamicVoronoi{
 	
@@ -65,21 +65,37 @@ class DynamicVoronoi{
         unsigned short map_height_;
         unsigned short map_width_;		
 		bool is_uniform_density_;
+		bool is_dropout_use_;
+		bool is_hete_cov_radius_;
 		bool is_workeff_constraint_;
 		bool is_point_optimization_;
+		bool is_propa_connected_area_;
 		bool is_propa_completed_;
+		bool is_img_save_;
+
 		bool dropout_active_ = false;
 		bool inhibit_dropout_ = false;
 		int inhibit_dropout_cnt = 0;
 		
 		int VoroPartNum_;
+		float TotalMass_;
 		float TotalArea_;
-		float DropOutToleranceRate_;
+		float CovrdMass_;
+		float CovrdArea_;
+		float CvdAreaDivMaxR_;
+		float DropOutWeight_;
 		float weight_w_;
 		float weight_h_;
 		float lamda_;
 		float x_datum_;
 		float y_datum_;
+		
+		float cc_metric_ = 100;
+		float cc_metric_prev_= 100;
+		
+		float cc_metric_diff_prev_ = 0;
+		float cc_metric_diff_final_ = 0;
+		float cc_metric_diff_rate_ = 0.3;
 		
 		std::vector<std::vector<float>> AgentCoorOpenSp_;
 		
@@ -95,14 +111,15 @@ class DynamicVoronoi{
 	
 	public: 
 	/*constructor and destructor*/
-	   DynamicVoronoi(unsigned short map_height, unsigned short map_width, float DropOutToleranceRate, float weight_w, float weight_h, float lamda, bool is_uniform_density, bool is_workeff_constraint, bool is_point_optimization, unsigned char* vorocellDenseMapExtPtr = NULL);
+	   DynamicVoronoi(unsigned short map_height, unsigned short map_width, float DropOutToleranceRate, float weight_w, float weight_h, float lamda, bool is_uniform_density, 
+	                                           bool is_dropout_use, bool is_workeff_constraint, bool is_hete_cov_radius, bool is_propa_connected_area, bool is_img_save, unsigned char* vorocellDenseMapExtPtr = NULL);
 	   ~DynamicVoronoi();
 	   
 	   int GetIndex(int x, int y);
 	   int MapPointToIndex(float x, float y);
 	   VoroCell* GetSingleCellByIndex(int x, int y);
 	   VoroCell* GetSingleCellByPoint(float x, float y);
-	   bool PushPoint(float x, float y, float v_travel, float v_work);
+	   bool PushPoint(float x, float y, float v_travel=0, float v_work=0, float cov_radius = 1);
 	   bool PushDatum(float x_datum, float y_datum);
 	   void InitializeCell();
 	   void InitializeDensityMap();
@@ -112,16 +129,18 @@ class DynamicVoronoi{
 	   bool saveAgentMap(std::string file_name);
 	   bool saveSingleVoro(std::string file_name, int x, int y);
 	   bool Colorized(std::string img_save_dir, std::string label_txt_dir);
-	   bool ExpandedVoronoi(bool is_propagation_animation = false, bool is_workeff_constraint = false, std::string img_dir ="/home/dummy", std::string label_dir = "/home/dummy.txt");
-	   void Propagatation(int agent_index, unsigned short agent_cen_x, unsigned short agent_cen_y, int col, int row, int StartingPt_x, int StartingPt_y, float init_pos_x, float init_pos_y, float v_travel, float v_work, int area, bool is_workeff_constraint);
-	   float MoveAgents();
-	   int CulObsCell(unsigned short agent_cen_x, unsigned short agent_cen_y, int col, int row);
+	   bool ExpandedVoronoi(bool is_propagation_animation = false, std::string img_dir ="/home/dummy", std::string label_dir = "/home/dummy.txt");
+	   void Propagatation(int agent_index, unsigned short agent_cen_x, unsigned short agent_cen_y, int col, int row, float radius, int StartingPt_x, int StartingPt_y, float init_pos_x, float init_pos_y, float v_travel, float v_work, int area);
+	   void MoveAgents();
+	   float CoverageMetric();
+	   float CulObsCell(unsigned short agent_cen_x, unsigned short agent_cen_y, int col, int row);
 	   bool FindNearPtNonObs(PartitionInfo* partition_info_single, float init_agent_coor_x_local, float init_agent_coor_y_local, float increment_x, float increment_y, float* ref_dist_sq);
 	   bool FindNearPtNonObs_R2(PartitionInfo* partition_info_single, float init_agent_coor_x_local, float init_agent_coor_y_local, float* ref_dist_sq);
        void AgentPosPostCheck(PartitionInfo* partition_info_single);
-	   void MainOptProcess(bool is_optimize_animation = false, std::string img_dir ="/home/dummy", std::string label_dir = "/home/dummy.txt", int max_step_size = 10, float terminate_criteria = 0.1);
+	   void AgentPosPropagation(std::queue<std::vector<int>>& PosQueue, unsigned char* VisitCheck, int init_x, int init_y);
+	   void MainOfflineProcess(bool is_optimize_animation = false, std::string img_dir ="/home/dummy", std::string label_dir = "/home/dummy.txt", int max_step_size = 10, float terminate_criteria = 0.1);
 	   void CentroidCal();
-	   void AgentDropOut();
+	   bool AgentDropOut();
 	 
 //	VoroCell* DynamicVoronoi::operator[](int index)
 //   {
