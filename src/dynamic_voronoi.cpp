@@ -163,6 +163,47 @@ bool DynamicVoronoi::PushDatum(float x_datum, float y_datum)
 	
 }
 
+bool DynamicVoronoi::AgentPoseUpdate(float x, float y, int agent_num)
+{
+	if(x >= this->map_width_)
+	{
+		return false;
+	}
+	
+	if(y >= this->map_height_)
+	{
+		return false;
+	}	
+	
+	if(agent_num > this->VoroPartNum_)
+	{
+		return false;
+	}
+	
+	PartitionInfo* partition_info_single = this->partition_info_[agent_num];
+	
+	partition_info_single->part_agent_coor_x_ = x;
+	partition_info_single->part_agent_coor_y_ = y;
+	
+	return true;
+}
+
+bool DynamicVoronoi::AgentPoseGet(float& x, float& y, int agent_num)
+{
+	
+	if(agent_num > this->VoroPartNum_)
+	{
+		return false;
+	}
+	
+	PartitionInfo* partition_info_single = this->partition_info_[agent_num];
+	
+	x = partition_info_single->part_agent_coor_x_ ;
+	y = partition_info_single->part_agent_coor_y_ ;
+	
+	return true;
+}
+
 bool DynamicVoronoi::PushPoint(float x, float y, float v_travel, float v_work, float cov_radius)
 {
 	/* add agent's parameter set (for example, agent position, velocity.. etc*/
@@ -371,7 +412,7 @@ bool DynamicVoronoi::Colorized(std::string img_save_dir, std::string label_txt_d
 		 {
 			 VoroCell* vorocell_temp = GetSingleCellByIndex(x, y);
 			 int agent_index = vorocell_temp->agentclass_;
-			 int density = this->GetDensity(x,y);
+			 float density = this->GetDensity(x,y);
 			 
 			 if(agent_index == 0xFFFF)
 			 {
@@ -499,11 +540,11 @@ void DynamicVoronoi::InitializeDensityMap()
 {
 	int x,y;
 	int area_wo_density = 0;
-	unsigned char density;
+	float density;
 	
 	if((this->is_uniform_density_ == true)||(this->vorocellDenseMapExtPtr_ == NULL))
 	{
-	   density = 1;
+	   density = 1.0/255.0;
 	   for(x= 0;x<this->map_width_;x++)
 	   {
 		   for(y=0;y<this->map_height_;y++)
@@ -558,7 +599,7 @@ void DynamicVoronoi::UpdateDensityMap(unsigned char* vorocellDenseMapExtPtr)
 	{
 		for(int y=0;y<this->map_height_;y++)
 		{
-			unsigned char  density = this->GetDensity(x,y);
+			float  density = this->GetDensity(x,y);
 			int index = this->GetIndex(x, y);
 			this->TotalMass_ = this->TotalMass_ + density;
 				
@@ -568,10 +609,10 @@ void DynamicVoronoi::UpdateDensityMap(unsigned char* vorocellDenseMapExtPtr)
 	}
 }
 
-unsigned char DynamicVoronoi::GetDensity(int x, int y)
+float DynamicVoronoi::GetDensity(int x, int y)
 {
 	int index = this->GetIndex(x, y);
-	return this->vorocellDenseMap_[index];
+	return ((float)this->vorocellDenseMap_[index])/255.0;
 }
 
 float DynamicVoronoi::CoverageMetric()
@@ -612,6 +653,12 @@ float DynamicVoronoi::CoverageMetric()
 	   return var;		
 		
 	}
+}
+
+void DynamicVoronoi::ResetDropout()
+{
+		   /* Initialize the dropout array*/
+		   for(int k = 0; k < this->VoroPartNum_; k++)   this->agentDropoutCheck_[k] = false;
 }
 
 void DynamicVoronoi::MainOfflineProcess(bool is_optimize_animation, std::string img_dir, std::string label_dir, int max_step_size, float terminate_criteria)
@@ -683,11 +730,7 @@ void DynamicVoronoi::MainOfflineProcess(bool is_optimize_animation, std::string 
 		   
 		   this->InitializeCell();
 		   
-		   /* Initialize the dropout array*/
-		   for(int k = 0; k < this->VoroPartNum_; k++)
-	       {
-			    this->agentDropoutCheck_[k] = false;
-		   }
+           this->ResetDropout();
 		   
 		   this->ExpandedVoronoi();
 	       this->CentroidCal();
@@ -1035,11 +1078,11 @@ void DynamicVoronoi::CentroidCal()
 			if(agentclass == 0xFFFF) continue;
 			
 			partition_info_single = this->partition_info_[agentclass];
-			unsigned char density_temp = GetDensity(col, row);
-			partition_info_single->part_mass_ = partition_info_single->part_mass_ + 1*density_temp;
+			float density_temp = GetDensity(col, row);
+			partition_info_single->part_mass_ = partition_info_single->part_mass_ + density_temp;
             partition_info_single->part_area_ = partition_info_single->part_area_ + 1;			
-			partition_info_single->centroid_momentsum_x_ = partition_info_single->centroid_momentsum_x_ + col*1*density_temp;
-			partition_info_single->centroid_momentsum_y_ = partition_info_single->centroid_momentsum_y_ + row*1*density_temp;	
+			partition_info_single->centroid_momentsum_x_ = partition_info_single->centroid_momentsum_x_ + ((float)col)*density_temp;
+			partition_info_single->centroid_momentsum_y_ = partition_info_single->centroid_momentsum_y_ + ((float)row)*density_temp;	
 			
 			/*calculate starting point */
 			int StartingPtDisTemp = std::abs(this->x_datum_ - col) + std::abs(this->y_datum_ - row);			
@@ -1145,26 +1188,24 @@ void DynamicVoronoi::MoveAgents()
 		{
 			
 			bool is_proj_success  = false;
-            float ref_dist_sq = this->map_width_*this->map_width_ + this->map_height_*this->map_height_; 
+            //float ref_dist_sq = this->map_width_*this->map_width_ + this->map_height_*this->map_height_; 
 		
-		    float init_agent_coor_x = partition_info_single->part_agent_coor_x_;
-		    float init_agent_coor_y = partition_info_single->part_agent_coor_y_;
-		
-		    bool is_proj_success_temp = this->FindNearPtNonObs(partition_info_single, init_agent_coor_x, init_agent_coor_y, -1, 0, &ref_dist_sq);  // go to west to find non obstacle region
-		    is_proj_success = is_proj_success_temp | is_proj_success;
-		    is_proj_success_temp = this->FindNearPtNonObs(partition_info_single, init_agent_coor_x, init_agent_coor_y, 1, 0, &ref_dist_sq);  // go to east to find non obstacle region
-		    is_proj_success = is_proj_success_temp | is_proj_success;
-		    is_proj_success_temp = this->FindNearPtNonObs(partition_info_single, init_agent_coor_x, init_agent_coor_y, 0, -1, &ref_dist_sq);  // go to north to find non obstacle region
-		    is_proj_success = is_proj_success_temp | is_proj_success;
-		    is_proj_success_temp = this->FindNearPtNonObs(partition_info_single, init_agent_coor_x, init_agent_coor_y, 0, 1, &ref_dist_sq);  // go to south to find non obstacle region
-		    is_proj_success = is_proj_success_temp | is_proj_success;
-			
-			if(is_proj_success == false)
-			{
-				is_proj_success_temp = FindNearPtNonObs_R2(partition_info_single, init_agent_coor_x, init_agent_coor_y, &ref_dist_sq); 
-				is_proj_success = is_proj_success_temp | is_proj_success;
-			}
-			
+		    //float init_agent_coor_x = partition_info_single->part_agent_coor_x_;
+		    //float init_agent_coor_y = partition_info_single->part_agent_coor_y_;
+
+		    //bool is_proj_success_temp = this->FindNearPtNonObs(partition_info_single, init_agent_coor_x, init_agent_coor_y, 1, 0, &ref_dist_sq);  // go to east to find non obstacle region
+		    //is_proj_success = is_proj_success_temp | is_proj_success;		
+		    //is_proj_success_temp = this->FindNearPtNonObs(partition_info_single, init_agent_coor_x, init_agent_coor_y, 0, -1, &ref_dist_sq);  // go to north to find non obstacle region
+		    //is_proj_success = is_proj_success_temp | is_proj_success;
+		    //is_proj_success_temp = this->FindNearPtNonObs(partition_info_single, init_agent_coor_x, init_agent_coor_y, -1, 0, &ref_dist_sq);  // go to west to find non obstacle region
+		    //is_proj_success = is_proj_success_temp | is_proj_success;
+		    //is_proj_success_temp = this->FindNearPtNonObs(partition_info_single, init_agent_coor_x, init_agent_coor_y, 0, 1, &ref_dist_sq);  // go to south to find non obstacle region
+		    //is_proj_success = is_proj_success_temp | is_proj_success;
+
+
+			bool is_proj_success_temp = ProjNearPoint(partition_info_single); 
+			is_proj_success = is_proj_success_temp | is_proj_success;
+
 			if(is_proj_success == false)
 			{
 				//partition_info_single->part_agent_coor_x_ = 0;
@@ -1238,7 +1279,7 @@ void DynamicVoronoi::MoveAgents()
 		    else
 			{
 
-                this->AgentPosPostCheck(partition_info_single);				
+                this->ProjNearPoint(partition_info_single);				
 				
 				std::vector<float> AgentCoor_temp;
 				AgentCoor_temp.push_back((int)std::round(partition_info_single->part_agent_coor_x_));
@@ -1250,10 +1291,34 @@ void DynamicVoronoi::MoveAgents()
 			}
 		}
 		
-
-		std::cout<<" agent number : "<<i<<" new agent coordinate x : "<<partition_info_single->part_agent_coor_x_<<" new agent coordinate y : "<<partition_info_single->part_agent_coor_y_<<std::endl;
+        std::cout<<" agent number : "<<i<<" new agent coordinate x : "<<partition_info_single->part_agent_coor_x_<<" new agent coordinate y : "<<partition_info_single->part_agent_coor_y_<<std::endl;
+		
 		
 	}
+	
+	/*for (int index = 0; index < this->VoroPartNum_; index ++)
+	{
+		PartitionInfo* partition_info_ego = this->partition_info_[index];
+		for (int j = 0; j < this->VoroPartNum_; j ++)
+		{
+
+		    if (j == index) continue;
+		
+	        PartitionInfo* partition_info_other = this->partition_info_[j];
+
+		   
+		    float other_x = partition_info_other->part_agent_coor_x_;
+			float other_y = partition_info_other->part_agent_coor_y_;
+		    float ego_x = partition_info_ego->part_agent_coor_x_;
+			float ego_y = partition_info_ego->part_agent_coor_y_;	
+
+		    if((std::abs(other_x - ego_x)<0.5)&&(std::abs(other_y - ego_y)<0.5))
+		    {	
+		        this->FindNearPtNonOvL(partition_info_ego);  // prevent agents from overlapping	
+		    }
+		}
+		
+	} */
 	
 	if(cnt_project_req==0)
 	{
@@ -1348,20 +1413,25 @@ float DynamicVoronoi::CulObsCell(unsigned short agent_cen_x, unsigned short agen
 	return CulObs;
 }
 
-void DynamicVoronoi::AgentPosPostCheck(PartitionInfo* partition_info_single)
+bool DynamicVoronoi::ProjNearPoint(PartitionInfo* partition_info_single)
 {
     int init_x = std::round(partition_info_single->part_agent_coor_x_);
 	int init_y = std::round(partition_info_single->part_agent_coor_y_);
-    
+    bool success = true;
+	
 	std::queue<std::vector<int>> PosQueue;  
     
 	unsigned char* VisitCheck;
 	
 	VisitCheck = new unsigned char[this->map_height_*this->map_width_];
-	memset(VisitCheck,0,map_height_*map_width_*sizeof (unsigned char));
+	memset(VisitCheck,0,this->map_height_*this->map_width_*sizeof (unsigned char));
 	AgentPosPropagation(PosQueue, VisitCheck, init_x, init_y);
+	
+	int cnt =0;
+	
 	while (PosQueue.size()>0)
 	{
+		cnt++;
 		std::vector<int> pos_front = PosQueue.front(); 
 		PosQueue.pop(); 
 		 
@@ -1372,10 +1442,20 @@ void DynamicVoronoi::AgentPosPostCheck(PartitionInfo* partition_info_single)
 			partition_info_single->part_agent_coor_y_ = pos_front[1];
 			break;
 		}
-        else 	AgentPosPropagation(PosQueue, VisitCheck, pos_front[0], pos_front[1]);		
+        else 	AgentPosPropagation(PosQueue, VisitCheck, pos_front[0], pos_front[1]);
+		
+		if(cnt > (this->map_width_*this->map_height_))
+		{
+			success = false;
+			break;
+		}
 	}
 
+
 	delete VisitCheck;
+	
+	return success;
+	
 }
 
 void DynamicVoronoi::AgentPosPropagation(std::queue<std::vector<int>>& PosQueue, unsigned char* VisitCheck, int init_x, int init_y)
@@ -1402,6 +1482,50 @@ void DynamicVoronoi::AgentPosPropagation(std::queue<std::vector<int>>& PosQueue,
 		PosQueue.push(pos_xy);
         pos_xy.clear();	
 	}
+}
+
+bool DynamicVoronoi::FindNearPtNonOvL(PartitionInfo* partition_info_single)
+{
+	bool end_while_loop = false;
+	bool is_in_range_ = true;
+	float init_agent_coor_x = partition_info_single->part_agent_coor_x_;
+	float init_agent_coor_y = partition_info_single->part_agent_coor_y_;
+	bool is_success_ = true;
+
+	int x_move[4] ={3, 0, -3, 0};
+	int y_move[4] ={0, 3, 0, -3};
+	
+	for (int k =0; k<4; k++)
+	{
+	    float new_agent_coor_x = init_agent_coor_x + x_move[k];
+	    float new_agent_coor_y = init_agent_coor_y + y_move[k];
+	
+	    if((new_agent_coor_x>=0)&&(new_agent_coor_x<=this->map_width_-1)&&(new_agent_coor_y>=0)&&(new_agent_coor_y<=this->map_height_-1))
+	    {
+			/*intentially empty*/
+	    }
+	    else
+	    {
+			is_in_range_ = false;
+	    }
+    
+	    float density = 0;
+	    if(is_in_range_ == true) density = this->GetDensity((int)std::round(new_agent_coor_x), (int)std::round(new_agent_coor_y));
+    
+	    if(density >0)
+	    {
+		    partition_info_single->part_agent_coor_x_ = (int)std::round(new_agent_coor_x);
+		    partition_info_single->part_agent_coor_y_ = (int)std::round(new_agent_coor_y);
+	    }
+	    else
+	    {
+		    is_success_ = false;
+	    }
+			
+	}
+	
+	return is_success_;
+	
 }
 
 bool DynamicVoronoi::FindNearPtNonObs(PartitionInfo* partition_info_single, float init_agent_coor_x_local, float init_agent_coor_y_local, float increment_x, float increment_y, float* ref_dist_sq)

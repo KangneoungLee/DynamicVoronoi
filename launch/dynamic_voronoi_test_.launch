@@ -1,0 +1,74 @@
+<?xml version="1.0"?>
+<launch>
+     
+
+
+     <arg name="dbg_args"   default="gdb -ex run --args"/>
+     <arg name="debug_args"   default=""/>
+
+     <node pkg="dynamic_voronoi" type="dynamic_voronoi_test" name="stair_detection_ros_node" launch-prefix="$(arg debug_args)" output="screen">
+
+          <param name="density_img_dir"    value="/home/kangneoung/sw_repo/dynamic_voronoi/src/dynamic_voronoi/test/density_new/case1/user_define.png"/>
+
+          <param name="map_height"        value="200"/>
+          <param name="map_width"        value="200"/>
+          <param name="agent_num"        value="10"/>
+		  <param name="weight_width" value="1"/>
+		  <param name="weight_height" value="1"/>
+		  <param name="lamda" value="0"/>
+		  <param name="dataum_x" value="0"/>
+		  <param name="dataum_y" value="50"/>
+                  <param name="is_hete_cov_radius" value="false"/>
+                  <param name="is_dropout_use" value="true"/>
+                  <param name="is_img_save" value="true"/>
+                  <param name="is_propa_connected_area" value="false"/>
+                  <param name="no_agent_internal_param" value="4"/>
+          <rosparam param="agent_attribute_list">   <!--  x_pose, y_pose, v_travel (pixel/time), v_work (pixel/time)-->
+          <!-- [
+            2, 2, 
+            2, 4, 
+            2, 6,
+            2, 8,
+            2, 10
+                 ] -->
+
+           <!-- [
+            2, 2, 
+            2, 4, 
+            2, 6,
+            2, 8,
+            2, 10,
+            4, 2,
+            4, 4,
+            4, 6,
+            4, 8,
+            4, 10            
+                  ] -->
+
+           [
+            8, 8, 4, 20,
+            8, 16, 4, 20,
+            8, 24, 4, 20,
+            8, 32, 4, 20,
+            8, 40, 4, 20,
+            16, 8, 4, 20,
+            16, 16, 4, 20,
+            16, 24, 4, 20,
+            16, 32, 4, 20,
+            16, 40, 4, 20,
+            8, 48, 4, 20,
+            8, 56, 4, 20,
+            8, 64, 4, 20,
+            8, 72, 4, 20,
+            8, 80, 4, 20,
+            16, 48, 4, 20,
+            16, 56, 4, 20,
+            16, 64, 4, 20,
+            16, 72, 4, 20,
+            16, 80, 4, 20   
+                  ]
+
+          </rosparam>
+     </node>
+
+</launch>
