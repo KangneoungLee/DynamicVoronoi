@@ -9,6 +9,7 @@ set(ROS_CXX_PKGS
      std_msgs
      cv_bridge
      sensor_msgs
+     nav_msgs
      geometry_msgs
      image_transport
      message_runtime
@@ -155,6 +156,14 @@ target_link_libraries(dynamic_voronoi voro_cell ${OpenCV_LIBS} ${Boost_LIBRARIES
 add_executable(dynamic_voronoi_ros src/dynamic_voronoi_ros.cpp)
 target_link_libraries(dynamic_voronoi_ros dynamic_voronoi ${catkin_LIBRARIES} ${OpenCV_LIBS})
 add_dependencies(dynamic_voronoi_ros ${catkin_EXPORTED_TARGETS})
+
+add_executable(dynamic_voronoi_ros_simple_goal_sender src/dynamic_voronoi_ros_simple_goal_sender.cpp)
+target_link_libraries(dynamic_voronoi_ros_simple_goal_sender dynamic_voronoi ${catkin_LIBRARIES} ${OpenCV_LIBS})
+add_dependencies(dynamic_voronoi_ros_simple_goal_sender ${catkin_EXPORTED_TARGETS})
+
+add_executable(dynamic_voronoi_virtual_agent_ros src/dynamic_voronoi_virtual_agent_ros.cpp)
+target_link_libraries(dynamic_voronoi_virtual_agent_ros ${catkin_LIBRARIES} ${OpenCV_LIBS})
+add_dependencies(dynamic_voronoi_virtual_agent_ros ${catkin_EXPORTED_TARGETS})
 
 
 add_executable(dynamic_voronoi_test test/dynamic_voronoi_test.cpp)

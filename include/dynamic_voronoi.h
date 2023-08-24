@@ -33,6 +33,8 @@ SOFTWARE.
 #include <map>
 #include <utility>  //pair 
 #include <cmath>        // std::abs
+#include <chrono>
+#include <cstdlib>
 
 #include <iostream>
 #include <fstream>
@@ -53,14 +55,14 @@ SOFTWARE.
 class DynamicVoronoi{
 	
 	private:
-	   	VoroCell** vorocell_;
-		PartitionInfo** partition_info_;
-	    unsigned char* vorocellDenseMap_;
+	   	VoroCell** vorocell_ = NULL;
+		PartitionInfo** partition_info_ = NULL;
+	    unsigned char* vorocellDenseMap_ = NULL;
 		
-		unsigned char* vorocellDenseMapExtPtr_;
+		unsigned char* vorocellDenseMapExtPtr_ = NULL;
 		bool* agentDropoutCheck_;
 		
-		unsigned char* vorocellObsMap_;
+		unsigned char* vorocellObsMap_ = NULL;
 		
         unsigned short map_height_;
         unsigned short map_width_;		
@@ -115,6 +117,7 @@ class DynamicVoronoi{
 	                                           bool is_dropout_use, bool is_workeff_constraint, bool is_hete_cov_radius, bool is_propa_connected_area, bool is_img_save, unsigned char* vorocellDenseMapExtPtr = NULL);
 	   ~DynamicVoronoi();
 	   
+	   VoroCell** GetVoroCellMap();
 	   int GetIndex(int x, int y);
 	   int MapPointToIndex(float x, float y);
 	   VoroCell* GetSingleCellByIndex(int x, int y);
@@ -123,6 +126,7 @@ class DynamicVoronoi{
 	   bool AgentPoseUpdate(float x, float y, int agent_num);
 	   bool AgentPoseGet(float& x, float& y, int agent_num);
 	   bool PushDatum(float x_datum, float y_datum);
+	   void ResizeMap(int map_height_new, int map_width_new, unsigned char* vorocellDenseMapExtPtr_new);
 	   void InitializeCell();
 	   void InitializeDensityMap();
 	   void UpdateDensityMap(unsigned char* vorocellDenseMapExtPtr);

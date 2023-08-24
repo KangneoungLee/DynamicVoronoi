@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<launch>
+     
+
+
+     <arg name="dbg_args"   default="gdb -ex run --args"/>
+     <arg name="debug_args"   default=""/>
+
+     <node pkg="dynamic_voronoi" type="dynamic_voronoi_virtual_agent_ros" name="dynamic_voronoi_virtual_agent_ros_node" launch-prefix="$(arg debug_args)" output="screen">
+         
+          <param name="online_update_rate" value="10"/> <!-- unit : hz -->
+          <param name="agent_num" value="10"/> <!-- unit : hz -->
+          <param name="virtual_agent_start_index" value="3"/>
+     </node>
+
+</launch>

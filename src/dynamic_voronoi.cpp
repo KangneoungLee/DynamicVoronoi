@@ -25,7 +25,7 @@ SOFTWARE.
  *********************************************************************/
 
 #include "dynamic_voronoi/dynamic_voronoi.h"
-#include <chrono>
+
 
 std::vector<std::string> split(std::string str, char Delimiter) {
     std::istringstream iss(str);             
@@ -116,6 +116,60 @@ DynamicVoronoi::~DynamicVoronoi()
 	 delete[] this->partition_info_;
 	 delete[] this->vorocellObsMap_;
 
+}
+
+void DynamicVoronoi::ResizeMap(int map_height_new, int map_width_new, unsigned char* vorocellDenseMapExtPtr_new)
+{
+	if(!(this->vorocell_ == NULL))  
+	{
+		for (int i = 0; i < this->map_height_*this->map_width_; ++i) delete this->vorocell_[i];
+		delete[] this->vorocell_;
+	}
+    
+	if(!(this->partition_info_ == NULL))  
+	{
+		for (int i = 0; i < this->VoroPartNum_; i++) 
+		{
+			PartitionInfo* partition_info_single = this->partition_info_[i];
+			partition_info_single->centroid_momentsum_x_ = 0;
+	        partition_info_single->centroid_momentsum_y_ = 0;
+	        partition_info_single->part_mass_ = 0;
+	        partition_info_single->part_area_ = 0;
+	        partition_info_single->part_radius_in_area_ = 0;
+	        partition_info_single->part_centroid_x_ = 0;
+	        partition_info_single->part_centroid_y_ = 0;
+		    partition_info_single->agent_parllel_momentsum_x_ = 0;
+	        partition_info_single->agent_parllel_momentsum_y_ = 0;
+		}
+	}
+	
+	if(!(this->vorocellDenseMap_ == NULL)) delete[] this->vorocellDenseMap_;
+	
+	if(!(this->vorocellObsMap_ == NULL)) delete[] this->vorocellObsMap_;	
+	
+	std::cout << " Map resize start " << std::endl;
+	
+	this->map_height_ = map_height_new;
+	this->map_width_ = map_width_new;
+	this->vorocellDenseMapExtPtr_ = vorocellDenseMapExtPtr_new;
+	
+	this->vorocell_ = new VoroCell*[this->map_height_*this->map_width_];
+	
+	for (int i = 0; i < this->map_height_*this->map_width_; ++i)  this->vorocell_[i] = new VoroCell();
+ 
+    this->vorocellDenseMap_ = new unsigned char[this->map_height_*this->map_width_]; 
+
+    this->vorocellObsMap_ = new unsigned char[this->map_height_*this->map_width_];
+	
+   this->InitializeCell();
+   this->InitializeDensityMap();	
+	
+   std::cout << " Map resize end "  << " new map height : " << this->map_height_  << " new map width : " << this->map_width_<< std::endl;
+}
+
+VoroCell** DynamicVoronoi::GetVoroCellMap()
+{
+	return this->vorocell_;
 }
 
 int DynamicVoronoi::GetIndex(int x, int y)
@@ -404,7 +458,7 @@ bool DynamicVoronoi::Colorized(std::string img_save_dir, std::string label_txt_d
 	    this->color_map_label_.push_back(color_temp);
 	 }
 	
-	 cv::Mat labelImg = cv::Mat::zeros(this->map_width_, this->map_height_, CV_8UC3);
+	 cv::Mat labelImg = cv::Mat::zeros(this->map_height_, this->map_width_, CV_8UC3);
 	 
 	 for (int x = 0; x<this->map_width_;x++)
 	 {
@@ -664,32 +718,35 @@ void DynamicVoronoi::ResetDropout()
 void DynamicVoronoi::MainOfflineProcess(bool is_optimize_animation, std::string img_dir, std::string label_dir, int max_step_size, float terminate_criteria)
 {
 
-    std::cout<<" DynamicVoronoi::MainOfflineProcess start " << std::endl;
-    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+     std::cout<<" DynamicVoronoi::MainOfflineProcess start " << std::endl;
+     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 	
 	
-	if(is_optimize_animation == true)
-	{
-	   std::string list_dir = img_dir + "img_file_list.txt";
-	   img_list.open(list_dir);   
-	}
-	std::string  info_dir = img_dir + "partition_info.txt";
-	PartInfoTxt.open(info_dir);
+	 if(is_optimize_animation == true)
+	 {
+	    std::string list_dir = img_dir + "img_file_list.txt";
+	    img_list.open(list_dir);   
+	 }
+	 std::string  info_dir = img_dir + "partition_info.txt";
+	 PartInfoTxt.open(info_dir);
 	
-    std::string metric_dir =  "/home/kangneoung/sw_repo/dynamic_voronoi/src/dynamic_voronoi/test/opt_animation/metric.txt";
-	MetricTxt.open(metric_dir);
+     std::string metric_dir =  "/home/kangneoung/sw_repo/dynamic_voronoi/src/dynamic_voronoi/test/opt_animation/metric.txt";
+	 MetricTxt.open(metric_dir);
 	 MetricTxt <<  "cc_metric_" << "   cc_metric_diff   " <<"   cc_metric_diff_final   " << " rate for final : " << cc_metric_diff_rate_ << std::endl;   
 
 
      std::string img_save_dir = img_dir + "init_pose_map.png";
      this->Colorized(img_save_dir,label_dir);
-
-	this->ExpandedVoronoi();
-	this->CentroidCal();
-    this->MoveAgents();	
+     std::cout<<" debug 1 " << std::endl;
+	 this->ExpandedVoronoi();
+	 std::cout<<" debug 2 " << std::endl;
+	 this->CentroidCal();
+	 std::cout<<" debug 3 " << std::endl;
+     this->MoveAgents();
+     std::cout<<" debug 4 " << std::endl;	 
 	
-	if(is_optimize_animation == true)
-	{
+	 if(is_optimize_animation == true)
+	 {
 		 std::string img_save_dir = img_dir + "map" +".png";
 		 this->Colorized(img_save_dir,label_dir);
 		 img_list<<"map.png"<<std::endl;
@@ -697,81 +754,81 @@ void DynamicVoronoi::MainOfflineProcess(bool is_optimize_animation, std::string 
 	   
 
 	   
-	this->InitializeCell(); 
+	 this->InitializeCell(); 
 	
-	cc_metric_prev_ = cc_metric_;
-	cc_metric_ = this->CoverageMetric();
+	 cc_metric_prev_ = cc_metric_;
+	 cc_metric_ = this->CoverageMetric();
 	   
-	float cc_metric_dif_init =  cc_metric_prev_ - cc_metric_;
-	MetricTxt << "  "<<cc_metric_ <<"    "<< cc_metric_dif_init<<std::endl;
+	 float cc_metric_dif_init =  cc_metric_prev_ - cc_metric_;
+	 MetricTxt << "  "<<cc_metric_ <<"    "<< cc_metric_dif_init<<std::endl;
 	 
-	for(int i = 0; i < max_step_size; i++)
-	{
+	 for(int i = 0; i < max_step_size; i++)
+	 {
        
-	   if(this->is_dropout_use_ == false)   this->inhibit_dropout_ = true; //forced inhibition for dropout
+	    if(this->is_dropout_use_ == false)   this->inhibit_dropout_ = true; //forced inhibition for dropout
     
-	   if ((this->inhibit_dropout_ == false)&&(this->cc_metric_diff_final_ <= terminate_criteria*2)&&(i>0))     this->inhibit_dropout_ = true;
-	   //if(this->inhibit_dropout_cnt >=  this->VoroPartNum_)  this->inhibit_dropout_ = true;
-	   if(this->inhibit_dropout_ == false)  this->dropout_active_ = this->AgentDropOut(); /*AgentDropOut function determines if dropout_active_ is false or true */   
+	    if ((this->inhibit_dropout_ == false)&&(this->cc_metric_diff_final_ <= terminate_criteria*2)&&(i>0))     this->inhibit_dropout_ = true;
+	    //if(this->inhibit_dropout_cnt >=  this->VoroPartNum_)  this->inhibit_dropout_ = true;
+	    if(this->inhibit_dropout_ == false)  this->dropout_active_ = this->AgentDropOut(); /*AgentDropOut function determines if dropout_active_ is false or true */   
 
-	   if (this->dropout_active_ == true)
-	   {
-		   this->inhibit_dropout_cnt ++;
-		   this->ExpandedVoronoi();
-	       this->CentroidCal();
-		   this->MoveAgents();
+	    if (this->dropout_active_ == true)
+	    {
+		    this->inhibit_dropout_cnt ++;
+		    this->ExpandedVoronoi();
+	        this->CentroidCal();
+		    this->MoveAgents();
 		   
-		   if(is_optimize_animation == true)
-	       {
-		   	    std::string img_save_dir = img_dir + "map" + std::to_string(i) + "dropout" +".png";
-			    this->Colorized(img_save_dir,label_dir);
-			    //img_list<<"map" + std::to_string(i) +".png"<<std::endl;
-	       }
+		    if(is_optimize_animation == true)
+	        {
+		   	     std::string img_save_dir = img_dir + "map" + std::to_string(i) + "dropout" +".png";
+			     this->Colorized(img_save_dir,label_dir);
+			     //img_list<<"map" + std::to_string(i) +".png"<<std::endl;
+	        }
 		   
-		   this->InitializeCell();
+		    this->InitializeCell();
 		   
-           this->ResetDropout();
+            this->ResetDropout();
 		   
-		   this->ExpandedVoronoi();
-	       this->CentroidCal();
-		   this->MoveAgents();
+		    this->ExpandedVoronoi();
+	        this->CentroidCal();
+		    this->MoveAgents();
 		   
-		   if(is_optimize_animation == true)
-	       {
-		   	    std::string img_save_dir = img_dir + "map" + std::to_string(i) + "after_dropout" +".png";
-			    this->Colorized(img_save_dir,label_dir);
-			    //img_list<<"map" + std::to_string(i) +".png"<<std::endl;
-	       }
-	   }
-	   else
-	   {
-		   this->ExpandedVoronoi();
-	       this->CentroidCal();
-		   this->MoveAgents();   
-	   }
+		    if(is_optimize_animation == true)
+	        {
+		   	     std::string img_save_dir = img_dir + "map" + std::to_string(i) + "after_dropout" +".png";
+			     this->Colorized(img_save_dir,label_dir);
+			     //img_list<<"map" + std::to_string(i) +".png"<<std::endl;
+	        }
+	    }
+	    else
+	    {
+		    this->ExpandedVoronoi();
+	        this->CentroidCal();
+		    this->MoveAgents();   
+	    }
 	   
-	   this->dropout_active_ = false;
+	    this->dropout_active_ = false;
 	   
 	   
-	   if(is_optimize_animation == true)
-	   {
-		  std::string img_save_dir = img_dir + "map" + std::to_string(i) +".png";
-		  this->Colorized(img_save_dir,label_dir);
-		  img_list<<"map" + std::to_string(i) +".png"<<std::endl;
-	   }
+	    if(is_optimize_animation == true)
+	    {
+		    std::string img_save_dir = img_dir + "map" + std::to_string(i) +".png";
+		    this->Colorized(img_save_dir,label_dir);
+		    img_list<<"map" + std::to_string(i) +".png"<<std::endl;
+	    }
 	   
-	   this->InitializeCell();
+	    this->InitializeCell();
 
-	   cc_metric_prev_ = cc_metric_;
-	   cc_metric_ = this->CoverageMetric();
+	    cc_metric_prev_ = cc_metric_;
+	    cc_metric_ = this->CoverageMetric();
 	   
-	   float cc_metric_diff =  cc_metric_prev_ - cc_metric_;
-	   this->cc_metric_diff_final_ =cc_metric_diff_rate_*cc_metric_diff + (1-cc_metric_diff_rate_)*this->cc_metric_diff_prev_;
-	   this->cc_metric_diff_prev_ = this->cc_metric_diff_final_;
+	    float cc_metric_diff =  cc_metric_prev_ - cc_metric_;
+	    this->cc_metric_diff_final_ =cc_metric_diff_rate_*cc_metric_diff + (1-cc_metric_diff_rate_)*this->cc_metric_diff_prev_;
+	    this->cc_metric_diff_prev_ = this->cc_metric_diff_final_;
 	   
-	   MetricTxt << "  "<<cc_metric_ <<"    "<< cc_metric_diff<<"   "<<cc_metric_diff_final_<<std::endl;
-	   if ((this->cc_metric_diff_final_ <= terminate_criteria)&&(this->inhibit_dropout_ == true)) 
-	   {
+	    MetricTxt << "  "<<cc_metric_ <<"    "<< cc_metric_diff<<"   "<<cc_metric_diff_final_<<std::endl;
+	    if ((this->cc_metric_diff_final_ <= terminate_criteria)&&(this->inhibit_dropout_ == true)) 
+	    {
 		     this->ExpandedVoronoi();
 
 			 if(is_optimize_animation == true)
@@ -783,7 +840,7 @@ void DynamicVoronoi::MainOfflineProcess(bool is_optimize_animation, std::string 
 			 
 		     std::cout<<" MainOptProcess : terminate criteria is satisfied " << std::endl;
 		     break;
-	   }
+	    }
 	   
 	   
 	   
@@ -964,7 +1021,7 @@ void DynamicVoronoi::Propagatation(int agent_index, unsigned short agent_cen_x, 
 		 int new_col = col+col_move[k];
 		 int new_row = row+row_move[k];
 		 
-		 if((new_col < 0)||(new_row < 0)||(new_col == this->map_height_)||(new_row == this->map_width_)) continue;
+		 if((new_col < 0)||(new_row < 0)||(new_row == this->map_height_)||( new_col == this->map_width_)) continue;
 		 
 		 vorocell_temp = GetSingleCellByIndex(new_col, new_row);
 		 
@@ -1269,11 +1326,11 @@ void DynamicVoronoi::MoveAgents()
 			if(density>0)
 			{
 							
-				std::vector<float> AgentCoor_temp;
+				/*std::vector<float> AgentCoor_temp;
 				AgentCoor_temp.push_back((int)std::round(partition_info_single->part_agent_coor_x_));
 				AgentCoor_temp.push_back((int)std::round(partition_info_single->part_agent_coor_y_));
 								
-			    if(this->AgentCoorOpenSp_.empty()) this->AgentCoorOpenSp_.push_back(AgentCoor_temp);
+			    if(this->AgentCoorOpenSp_.empty()) this->AgentCoorOpenSp_.push_back(AgentCoor_temp);*/
 			    	
 			}
 		    else
@@ -1281,17 +1338,17 @@ void DynamicVoronoi::MoveAgents()
 
                 this->ProjNearPoint(partition_info_single);				
 				
-				std::vector<float> AgentCoor_temp;
+				/* std::vector<float> AgentCoor_temp;
 				AgentCoor_temp.push_back((int)std::round(partition_info_single->part_agent_coor_x_));
 				AgentCoor_temp.push_back((int)std::round(partition_info_single->part_agent_coor_y_));
 				
-				float density_temp = this->GetDensity((int)std::round(partition_info_single->part_agent_coor_x_), (int)std::round(partition_info_single->part_agent_coor_y_));  /* somtimes, the post pos check doesn't work. density should be checked again*/
+				float density_temp = this->GetDensity((int)std::round(partition_info_single->part_agent_coor_x_), (int)std::round(partition_info_single->part_agent_coor_y_));  // somtimes, the post pos check doesn't work. density should be checked again
 				
-			    if((this->AgentCoorOpenSp_.empty())&&(density_temp > 0)) this->AgentCoorOpenSp_.push_back(AgentCoor_temp);
+			    if((this->AgentCoorOpenSp_.empty())&&(density_temp > 0)) this->AgentCoorOpenSp_.push_back(AgentCoor_temp);*/
 			}
 		}
 		
-        std::cout<<" agent number : "<<i<<" new agent coordinate x : "<<partition_info_single->part_agent_coor_x_<<" new agent coordinate y : "<<partition_info_single->part_agent_coor_y_<<std::endl;
+       std::cout<<" agent number : "<<i<<" new agent coordinate x : "<<partition_info_single->part_agent_coor_x_<<" new agent coordinate y : "<<partition_info_single->part_agent_coor_y_<<std::endl;
 		
 		
 	}
@@ -1317,7 +1374,7 @@ void DynamicVoronoi::MoveAgents()
 		        this->FindNearPtNonOvL(partition_info_ego);  // prevent agents from overlapping	
 		    }
 		}
-		
+		std::cout<<" agent number : "<<index<<" new agent coordinate x : "<<partition_info_ego->part_agent_coor_x_<<" new agent coordinate y : "<<partition_info_ego->part_agent_coor_y_<<std::endl;
 	} */
 	
 	if(cnt_project_req==0)
@@ -1484,21 +1541,23 @@ void DynamicVoronoi::AgentPosPropagation(std::queue<std::vector<int>>& PosQueue,
 	}
 }
 
-bool DynamicVoronoi::FindNearPtNonOvL(PartitionInfo* partition_info_single)
+bool DynamicVoronoi::FindNearPtNonOvL(PartitionInfo* partition_info)
 {
 	bool end_while_loop = false;
 	bool is_in_range_ = true;
-	float init_agent_coor_x = partition_info_single->part_agent_coor_x_;
-	float init_agent_coor_y = partition_info_single->part_agent_coor_y_;
+	float init_agent_coor_x = partition_info->part_agent_coor_x_;
+	float init_agent_coor_y = partition_info->part_agent_coor_y_;
 	bool is_success_ = true;
 
-	int x_move[4] ={3, 0, -3, 0};
-	int y_move[4] ={0, 3, 0, -3};
+     int mul = std::rand()%5;
+
+	int x_move[4] ={1, 0, -1, 0};
+	int y_move[4] ={0, 1, 0, -1};
 	
 	for (int k =0; k<4; k++)
 	{
-	    float new_agent_coor_x = init_agent_coor_x + x_move[k];
-	    float new_agent_coor_y = init_agent_coor_y + y_move[k];
+	    float new_agent_coor_x = init_agent_coor_x + x_move[k]*mul;
+	    float new_agent_coor_y = init_agent_coor_y + y_move[k]*mul;
 	
 	    if((new_agent_coor_x>=0)&&(new_agent_coor_x<=this->map_width_-1)&&(new_agent_coor_y>=0)&&(new_agent_coor_y<=this->map_height_-1))
 	    {
@@ -1514,8 +1573,9 @@ bool DynamicVoronoi::FindNearPtNonOvL(PartitionInfo* partition_info_single)
     
 	    if(density >0)
 	    {
-		    partition_info_single->part_agent_coor_x_ = (int)std::round(new_agent_coor_x);
-		    partition_info_single->part_agent_coor_y_ = (int)std::round(new_agent_coor_y);
+		    partition_info->part_agent_coor_x_ = (int)std::round(new_agent_coor_x);
+		    partition_info->part_agent_coor_y_ = (int)std::round(new_agent_coor_y);
+			break;
 	    }
 	    else
 	    {

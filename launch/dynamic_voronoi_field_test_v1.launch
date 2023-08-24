@@ -1,0 +1,99 @@
+<?xml version="1.0"?>
+<launch>
+     
+
+
+     <arg name="dbg_args"   default="gdb -ex run --args"/>
+     <arg name="debug_args"   default=""/>
+
+     <node pkg="dynamic_voronoi" type="dynamic_voronoi_ros_simple_goal_sender" name="dynamic_voronoi_ros_simple_goal_sender_node" launch-prefix="$(arg debug_args)" output="screen">
+         
+          <param name="is_online_density_map" value="false"/>
+          <param name="is_online_pose_update" value="true"/>
+          <param name="map_resolution" value="0.1"/> <!-- 0.1 : 1 pixel means 0.1 meter-->
+          <param name="online_update_rate" value="1"/> <!-- unit : hz -->
+
+
+          <param name="density_img_dir"    value="/home/kangneoung/sw_repo/dynamic_voronoi/src/dynamic_voronoi/test/density_new/case1/user_define.png"/>
+
+          <param name="map_height"        value="200"/>
+          <param name="map_width"        value="200"/>
+ 
+          <param name="weight_width" value="1"/>
+          <param name="weight_height" value="1"/>
+	  <param name="lamda" value="0"/>
+	  <param name="dataum_x" value="0"/>
+	  <param name="dataum_y" value="50"/>
+          <param name="is_hete_cov_radius" value="true"/>
+          <param name="is_dropout_use" value="true"/>
+          <param name="is_img_save" value="true"/>
+          <param name="is_propa_connected_area" value="false"/>
+          <param name="travel_time_duration" value="20"/>
+          <param name="agent_num"        value="10"/>
+          <param name="y_axis_swap"        value="true"/> 
+          <!-- if y_axis_swap is true, map coordinate in dynamic voronoi follows image coordinate (E : x, S :y) and real agent follows ENU coordinate (E : x, N : y) -->
+          <!-- if y_axis_swap is false, map coordinate in dynamic voronoi and real agents follow image coordinate (E : x, S :y)-->
+          <param name="no_agent_internal_param" value="6"/>
+          <rosparam param="agent_attribute_list">   <!--  x_pose, y_pose, v_travel (pixel/time), v_work (pixel/time)-->
+          <!-- [
+            2, 2, 
+            2, 4, 
+            2, 6,
+            2, 8,
+            2, 10
+                 ] -->
+
+           <!-- [
+            2, 2, 
+            2, 4, 
+            2, 6,
+            2, 8,
+            2, 10,
+            4, 2,
+            4, 4,
+            4, 6,
+            4, 8,
+            4, 10            
+                  ] -->
+
+           <!--[
+            8, 8, 4, 20, 8, 
+            8, 16, 4, 20, 8,
+            8, 24, 4, 20, 8,
+            8, 32, 4, 20, 8,
+            8, 40, 4, 20, 8,
+            16, 8, 4, 20, 16,
+            16, 16, 4, 20, 16,
+            16, 24, 4, 20, 16,
+            16, 32, 4, 20, 16,
+            16, 40, 4, 20, 16,
+            8, 48, 4, 20,
+            8, 56, 4, 20,
+            8, 64, 4, 20,
+            8, 72, 4, 20,
+            8, 80, 4, 20,
+            16, 48, 4, 20,
+            16, 56, 4, 20,
+            16, 64, 4, 20,
+            16, 72, 4, 20,
+            16, 80, 4, 20   
+                  ] -->
+
+<!-- init pose x, init pose y, dummy 1, dummy 2, max_speed, virtual (0: virtual 1: real)-->
+           [
+            8, 8, 4, 20, 0.2, 1,
+            8, 16, 4, 20, 0.2, 1,
+            8, 24, 4, 20, 0.4, 1,
+            8, 32, 4, 20, 0.4, 0,
+            8, 40, 4, 20, 0.4, 0,
+            16, 8, 4, 20, 0.4, 0,
+            16, 16, 4, 20, 0.4, 0,
+            16, 24, 4, 20, 0.4, 0,
+            16, 32, 4, 20, 0.4, 0,
+            16, 40, 4, 20, 0.4, 0
+                  ] 
+
+          </rosparam>
+     </node>
+
+</launch>
