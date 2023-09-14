@@ -1136,6 +1136,9 @@ void DynamicVoronoi::CentroidCal()
 			
 			partition_info_single = this->partition_info_[agentclass];
 			float density_temp = GetDensity(col, row);
+			
+			if (density_temp <= 0) continue;
+			
 			partition_info_single->part_mass_ = partition_info_single->part_mass_ + density_temp;
             partition_info_single->part_area_ = partition_info_single->part_area_ + 1;			
 			partition_info_single->centroid_momentsum_x_ = partition_info_single->centroid_momentsum_x_ + ((float)col)*density_temp;
